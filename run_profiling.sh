@@ -1,6 +1,6 @@
 #!/bin/bash
 
-EXECUTABLE="./main"
+EXECUTABLE="ProgettoGruppo9/32/main"
 
 if [ -f "$EXECUTABLE" ]; then
     perf record "$EXECUTABLE"
