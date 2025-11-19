@@ -4,6 +4,10 @@
 #include <time.h>
 #include <math.h>
 
+  static int N = 5;
+  static int D = 3;
+  static int h = 2;
+
 //
 // ---------------------------------------------------------------
 //  PROTOTIPI
@@ -136,6 +140,17 @@ void quantizing(float *v, int D, int kUnused, float *vMinus, float *vPlus) {
     arr_ctx = NULL;
 }
 
+float* indexing(float *p, float *v) {
+  float output[];
+  for (int i = 0; i<N*D; i++) {
+    for (int j = 0; j < D*h; j++) {
+      output[]
+    }
+  }
+
+  return output;
+}
+
 
 //
 // ---------------------------------------------------------------
@@ -187,15 +202,13 @@ int nomeFittizio() {
 }
 
 
+
 //
 // ---------------------------------------------------------------
 //  MAIN
 // ---------------------------------------------------------------
 int main() {
 
-    int N = 5;
-    int D = 3;
-    int h = 2;
 
     srand((unsigned int)time(NULL));
 
