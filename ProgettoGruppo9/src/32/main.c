@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include "include/quantize.h"
 
 static const int *arr_ctx;
 /**
