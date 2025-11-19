@@ -31,7 +31,7 @@ int nomeFittizio();
 //  LETTURA FILE (placeholder)
 // ---------------------------------------------------------------
 float* readFile(char *f) {
-    return NULL;
+  return NULL;
 }
 
 
@@ -40,9 +40,9 @@ float* readFile(char *f) {
 //  CALCOLO PIVOT
 // ---------------------------------------------------------------
 float* calcoloPivot(float *dataSet, int h, int N, int D) {
-    float* pivot = malloc(sizeof(float) * D * h);
+  float* pivot = malloc(sizeof(float) * D * h);
     int offset = (int) floorf((float)N / h);
-    int k = 0;
+  int k = 0;
 
     for (int i = 0; i < N && k < h; i += offset) {
         for (int j = 0; j < D; j++) {
@@ -50,7 +50,7 @@ float* calcoloPivot(float *dataSet, int h, int N, int D) {
         }
         k++;
     }
-    return pivot;
+  return pivot;
 }
 
 
@@ -59,8 +59,8 @@ float* calcoloPivot(float *dataSet, int h, int N, int D) {
 //  QUERY (placeholder)
 // ---------------------------------------------------------------
 float* executeQuery(float q) {
-    return NULL;
-}
+  return NULL;
+} 
 
 
 //
@@ -237,9 +237,7 @@ int main() {
         printf("\n");
     }
 
-    // TEST quantize
-    nomeFittizio();
-
+    // Libera memoria
     free(array);
     free(pivots);
 
