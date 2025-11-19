@@ -1,6 +1,5 @@
 #pragma once
 
-float dEuclidea(int id, float d);
+float dEuclidea(float *v, float *w, const unsigned int D);
 void ordinamento();
 float prodScalare(float *v, float *w);
-
