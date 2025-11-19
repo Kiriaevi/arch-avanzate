@@ -2,7 +2,7 @@
 #include <string.h>
 #include <stdio.h>
 
-static const int *arr_ctx;
+static const float *arr_ctx;
 /**
  * Legge da un file e restituisce un array di float 
  * INPUT: string s, contenente il path da leggere 
@@ -18,23 +18,23 @@ int comparatore(const void *a, const void *b) {
  * INPUT: array v di dimensione D, parametro x che indica quanti massimi in v.assoluto cercare
  * OUTPUT: restituisce due array di interi v+ e v-, inizializzata con 0 e 1 nella posizione dei massimi trovati
  */
-void quantizing() {
+void quantizing(float *v, int d, int k, float *vMinus, float *vPlus) {
     // possibile FIXME: l'array potrebbe essere MOLTO grande, forse è meglio allocare
     // nell'heap (malloc) e non nello stack
-    int arr[] = { 2 ,6, 1, -5, 3, 4 };
+    //int arr[] = { 2 ,6, 1, -5, 3, 4 };
     
-    int n = sizeof(arr) / sizeof(arr[0]);
-
+    //int n = sizeof(arr) / sizeof(arr[0]);
+    int n = 0;
     int array_indici[n];
     // 0, 1, 2, 3, 4, 5
     for(int i = 0; i < n; i++) 
       array_indici[i] = i;
 
     // mi aspetto di trovare 1, -3, 5, 4, 0, 2
-    arr_ctx = arr;
+    arr_ctx = v;
     qsort(array_indici, n, sizeof(int), comparatore);
     for (int i = 0; i < n; i++) {
-      if (arr[array_indici[i]] < 0)
+      if (v[array_indici[i]] < 0)
         array_indici[i] = -array_indici[i];
     }
 

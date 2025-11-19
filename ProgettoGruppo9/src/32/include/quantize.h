@@ -1,2 +1,2 @@
 #pragma once
-void quantizing();
+void quantizing(float *v, int d, int x);
