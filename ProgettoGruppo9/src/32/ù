@@ -143,26 +143,27 @@ float distanzaApprossimata(float *v, float *w){
   return 0.0f;
 }
 float* creaVettore(float *v, int idx){
-    float* output = malloc(D*sizeof(float));
-    for(int j = 0; j < D; j++) {
-        output[j] = v[idx*D + j]; 
-    }
-    return output;
+  float* output = malloc(D*sizeof(float));
+  for(int j = 0; j < D; j++) {
+    output[j] = v[idx + j]; 
+  }
+  return output;
 }
 float* indexing(float *p, float *v) {
-    float *output = malloc(N*h*sizeof(float));
-
-    for (int r = 0; r < N; r++) {            
-        float *vettore = creaVettore(v, r);
-        for (int c = 0; c < h; c++) {       
-            float *vPivot = creaVettore(p, c);
-            output[r * h + c] = distanzaApprossimata(vettore, vPivot);
-            free(vPivot);
-        }
-        free(vettore);
+  float *output = malloc(N*h*sizeof(float));
+  int k = 0;
+  for (int i = 0; i<N*D; i+=D) {
+    float *vettore = creaVettore(v, i);
+    for (int j = 0; j < D*h; j+=D) {
+      float *vPivot = creaVettore(p, j);
+      output[i + k] = distanzaApprossimata(vettore, vPivot);
+      k++;
     }
-    return output;
+  }
+  return output;
 }
+
+
 //
 // ---------------------------------------------------------------
 //  FUNZIONI DI TEST
