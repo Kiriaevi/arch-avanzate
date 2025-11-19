@@ -7,14 +7,6 @@ float dEuclidea(int id, float d) {
   return 0.0f;
 }
 /**
- * ordina un array in valore assoluto
- * INPUT: arr, array di float da ordinare
- * OUTPUT: outArr, array ordinato
- */
-void ordinamento() {
-}
-
-/**
  * Dati due vettori v e w ne effettua il prodotto scalare
  * INPUT: array di float v, array di float w 
  * OUTPUT: un float che restituisce la distanza
