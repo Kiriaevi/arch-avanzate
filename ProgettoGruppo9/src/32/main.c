@@ -150,17 +150,20 @@ float* creaVettore(float *v, int idx){
     return output;
 }
 float* indexing(float *p, float *v) {
-    float *output = malloc(N*h*sizeof(float));
+    float *output = malloc(N * h * sizeof(float));
+    
+    for (int r = 0; r < N; r++) {
 
-    for (int r = 0; r < N; r++) {            
-        float *vettore = creaVettore(v, r);
-        for (int c = 0; c < h; c++) {       
-            float *vPivot = creaVettore(p, c);
+        float *vettore = &v[r * D];   // CAMBIA QUI
+
+        for (int c = 0; c < h; c++) {
+
+            float *vPivot = &p[c * D]; // E QUI
+
             output[r * h + c] = distanzaApprossimata(vettore, vPivot);
-            free(vPivot);
         }
-        free(vettore);
     }
+
     return output;
 }
 //
