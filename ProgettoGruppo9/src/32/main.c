@@ -4,11 +4,11 @@
 #include <time.h>
 #include <math.h>
 
-static int N = 8; //Righe dataset
+static int N = 3; //Righe dataset
 static int D = 10; //Colonne dataset
-static int h = 4; // numero di pivot
-static int x = 4; // parametro di quantizzazione
-static int k = 4; // numero di vicini
+static int h = 1; // numero di pivot
+static int x = 3; // parametro di quantizzazione
+static int k = 3; // numero di vicini
 
 
 //
@@ -113,8 +113,14 @@ int comparatore(const void *a, const void *b) {
     int i1 = *(int*)a;
     int i2 = *(int*)b;
 
-    return (fabsf(arr_ctx[i2]) - fabsf(arr_ctx[i1]));
+    float v1 = fabsf(arr_ctx[i1]);
+    float v2 = fabsf(arr_ctx[i2]);
+
+    if (v1 < v2) return  1;
+    if (v1 > v2) return -1;
+    return 0;
 }
+
 
 void quantizing(float *v, float *vMinus, float *vPlus) {
     printf("\nQuantizing di: ");
