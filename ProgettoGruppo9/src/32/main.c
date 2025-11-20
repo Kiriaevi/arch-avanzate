@@ -182,9 +182,12 @@ float distanzaApprossimata(float *v, float *w) {
     float *wMinus = calloc(D, sizeof(float));
     float *wPlus  = calloc(D, sizeof(float));
     // Quantizzo v e w
+    printf("\n Quantize del primo vettore\n");
     quantizing(v, vMinus, vPlus);
+    printf("\nQuantize del secondo vettore\n");
     quantizing(w, wMinus, wPlus);
     // Calcolo i prodotti scalari
+    printf("Calcolo dei prodotti scalari dei due vettori\n");
     float posPos = prodScalare(vPlus, wPlus);
     float negNeg = prodScalare(vMinus, wMinus);
     float posNeg = prodScalare(vPlus, wMinus);
