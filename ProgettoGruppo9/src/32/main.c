@@ -4,11 +4,11 @@
 #include <time.h>
 #include <math.h>
 
-static int N = 3; //Righe dataset
-static int D = 10; //Colonne dataset
-static int h = 1; // numero di pivot
-static int x = 3; // parametro di quantizzazione
-static int k = 3; // numero di vicini
+static int N = 100; //Righe dataset
+static int D = 20; //Colonne dataset
+static int h = 3; // numero di pivot
+static int x = 5; // parametro di quantizzazione
+static int k = 5; // numero di vicini
 
 #define FLT_MAX 3.402823466e+38F
 
@@ -19,6 +19,7 @@ static int k = 3; // numero di vicini
 float* readFile(char *f);
 float* calcoloPivot(float *dataSet, int h, int N, int D);
 float* executeQuery(float q);
+float* indexing(float *p, float *v);
 
 float dEuclidea(float *v, float *w);
 float prodScalare(float *v, float *w);
@@ -29,74 +30,8 @@ void quantizing(float *v, float *vMinus, float *vPlus);
 void testQuantizing(float *v, const char *name);
 int nomeFittizio();
 
-float* querying(float *query, float *pivot, float *dataSet);
+float* querying(float *query, float *pivot, float *dataSet, float* vettoreIndexing);
 
-//
-// ---------------------------------------------------------------
-//  QUERYING
-// ---------------------------------------------------------------
-float* querying(float *query, float *pivot, float *dataSet){
-    // Il vettore KNN è lungo K elementi, ognuno a D dimensioni.
-    int dimensioneKnn = 2*k;
-    float* KNN = malloc(sizeof(float) * dimensioneKnn);
-    int j = 0;
-    // Inizializza i KNN di q a distanza +inf
-    for (int i = 0; i < dimensioneKnn; i++)
-    {
-        if (j % 2 == 0)
-        {
-            KNN[i] = -1;
-        }
-        else{
-            KNN[i] = FLT_MAX;
-        }
-        j = (j+1)%2;
-        
-    }
-    float* distanzaApprossimataQP = malloc(sizeof(float) * h); // Questo è lungo tanto quanto una riga del dataset
-    //Itero per ricostruire i pivot
-    int index = 0;
-    float* pivotCuscinetto = calloc(D, sizeof(float)); // alloco un vettore temporaneo tutto nullo, lo aggiorno ad ogni iterazione dei pivot
-    for (int i = 0; i < D * h; i+= D)
-    {
-        //Il ciclo esterno seleziona il pivot i esimo
-        for (int j = 0; j < D; j++)
-        {
-            // il ciclo interno, invece, seleziona elemento per elemento del pivot i esimo
-            pivotCuscinetto[j] = pivot[i + j];
-        }
-        distanzaApprossimataQP[index] = distanzaApprossimata(query,pivotCuscinetto);
-        index++;
-    }
-    // Precalcoliamo la distanza approssimata (vettoreDataset - pivot). È grande N elementi, uno per riga
-    float* distanzaApprossimataVP = malloc(sizeof(float) * N); 
-    // Creo un vettore cuscinetto per estrarre la riga dal dataset
-    float* vettoreCuscinetto = malloc(sizeof(float) * D);
-    for (int i = 0; i < D * N; i+=D)
-    {
-        for (int j = 0; j < D; j++)
-        {
-            vettoreCuscinetto[j] = dataSet[i+j];
-        }
-        // Ho estratto il vettore, ora calcolo la distanza approssimata da ogni pivot
-        // 
-        for (int indexPivot = 0; indexPivot < D * h; indexPivot+=D)
-        {
-            for (int elementoPivot = 0; elementoPivot < D; elementoPivot++)
-            {
-                
-            }
-            
-        }
-        
-        
-    }
-    free(vettoreCuscinetto);
-    free(distanzaApprossimataVP);
-    free(pivotCuscinetto);
-    free(distanzaApprossimataQP);
-    free(KNN);
-}
 
 
 //
@@ -155,7 +90,7 @@ float dEuclidea(float *v, float *w) {
 //  PRODOTTO SCALARE
 // ---------------------------------------------------------------
 float prodScalare(float *v, float *w) {
-    printf("Calcolo prodotto scalare fra \n");
+    /*printf("Calcolo prodotto scalare fra \n");
     for (int i = 0; i < D; i++){
         printf("%.2f ",v[i]);
     }
@@ -164,11 +99,12 @@ float prodScalare(float *v, float *w) {
         printf("%.2f ",w[i]);
     }
     printf("\n");
+    */
     float prod = 0.0f;
     for (int i = 0; i < D; i++) {
         prod += v[i] * w[i];
     }
-    printf("Risultato = %.5f \n",prod);
+    //printf("Risultato = %.5f \n",prod);
     return prod;
 }
 
@@ -193,9 +129,10 @@ int comparatore(const void *a, const void *b) {
 
 
 void quantizing(float *v, float *vMinus, float *vPlus) {
-    printf("\nQuantizing di: ");
+    /*printf("\nQuantizing di: ");
         for (int i = 0; i < D; i++) 
             printf("%.2f ", v[i]);
+            **/
     int array_indici[D];
     for (int i = 0; i < D; i++){
         array_indici[i] = i;
@@ -211,10 +148,10 @@ void quantizing(float *v, float *vMinus, float *vPlus) {
         if (v[array_indici[i]] < 0)
             array_indici[i] = -array_indici[i];
 
-    printf("\nOrdine indici assoluti con segno: ");
+   /* printf("\nOrdine indici assoluti con segno: ");
     for (int i = 0; i < D; i++)
         printf("%d ", array_indici[i]);
-
+*/
     if (x > D) {
         fprintf(stderr, "ERRORE: richiesti %d massimi ma dataset ha dimensione %d\n", x, D);
         return;
@@ -230,7 +167,7 @@ void quantizing(float *v, float *vMinus, float *vPlus) {
     }
 
     arr_ctx = NULL;
-
+/*
     printf("\nTop-%d elementi per |valore|: ", x);
     for (int k = 0; k < x; k++) 
         printf("%d ", array_indici[k]);
@@ -244,6 +181,7 @@ void quantizing(float *v, float *vMinus, float *vPlus) {
         printf("%.0f ", vMinus[i]);
 
     printf("\n");
+    */
 }
 float distanzaApprossimata(float *v, float *w) {
     // Alloco i vettori quantizzati
@@ -252,24 +190,24 @@ float distanzaApprossimata(float *v, float *w) {
     float *wMinus = calloc(D, sizeof(float));
     float *wPlus  = calloc(D, sizeof(float));
     // Quantizzo v e w
-    printf("\n Quantize del primo vettore\n");
+//    printf("\n Quantize del primo vettore\n");
     quantizing(v, vMinus, vPlus);
-    printf("\nQuantize del secondo vettore\n");
+//    printf("\nQuantize del secondo vettore\n");
     quantizing(w, wMinus, wPlus);
     // Calcolo i prodotti scalari
-    printf("Calcolo dei prodotti scalari dei due vettori\n");
+  //  printf("Calcolo dei prodotti scalari dei due vettori\n");
     float posPos = prodScalare(vPlus, wPlus);
     float negNeg = prodScalare(vMinus, wMinus);
     float posNeg = prodScalare(vPlus, wMinus);
     float negPos = prodScalare(vMinus, wPlus);
     // Stampo tutti i termini
-    printf("\nDistanza approssimata:\n");
-    printf("v+ · w+ = %.5f\n", posPos);
-    printf("v- · w- = %.5f\n", negNeg);
-    printf("v+ · w- = %.5f\n", posNeg);
-    printf("v- · w+ = %.5f\n", negPos);
+    //printf("\nDistanza approssimata:\n");
+    //printf("v+ · w+ = %.5f\n", posPos);
+    //printf("v- · w- = %.5f\n", negNeg);
+    //printf("v+ · w- = %.5f\n", posNeg);
+    //printf("v- · w+ = %.5f\n", negPos);
     float approx = posPos + negNeg - posNeg - negPos;
-    printf("Distanza approssimata = %.5f\n", approx);
+    //printf("Distanza approssimata = %.5f\n", approx);
     // Libero la memoria
     free(vMinus);
     free(vPlus);
@@ -278,10 +216,10 @@ float distanzaApprossimata(float *v, float *w) {
     return approx;
 }
 
-float* creaVettore(float *v, int idx){
+float* estraiRiga(float *v, int idx){
     float* output = malloc(D*sizeof(float));
     for(int j = 0; j < D; j++) {
-        output[j] = v[idx*D + j]; 
+        output[j] = v[idx + j]; 
     }
     return output;
 }
@@ -296,6 +234,115 @@ float* indexing(float *p, float *v) {
     }
     return output;
 }
+
+float get_d_k_max(float *KNN, int k) {
+    // La lista KNN è [id1, d1, id2, d2, ..., idk, dk]. 
+    // Le distanze si trovano agli indici dispari.
+    float max_distance = -1.0f; // Inizializza con un valore negativo (distanza non negativa)
+    
+    // Itera su tutti i k punti (2*k elementi, ma solo k distanze)
+    for (int i = 0; i < k; i++) {
+        // L'indice della distanza del punto i-esimo è (i * 2) + 1
+        float current_distance = KNN[(i * 2) + 1]; 
+        
+        // Controlla e aggiorna il massimo
+        if (current_distance > max_distance) {
+            max_distance = current_distance;
+        }
+    }
+    return max_distance;
+}
+void insert_into_knn(float *KNN, int k, int id, float distance) {
+    float max_distance = -1.0f;
+    int max_index_id = -1; // Indice pari (posizione dell'ID) del punto più lontano
+
+    // 1. Trova l'elemento più lontano (d_k_max) e la sua posizione
+    // Scorriamo tutte le k distanze (agli indici dispari)
+    for (int i = 0; i < k; i++) {
+        int index_dist = (i * 2) + 1;
+        float current_distance = KNN[index_dist];
+        
+        // Se troviamo una distanza maggiore della massima finora, la memorizziamo
+        if (current_distance > max_distance) {
+            max_distance = current_distance;
+            max_index_id = i * 2; // Memorizziamo l'indice dell'ID
+        }
+    }
+
+    // 2. Sostituzione (Se il nuovo punto è più vicino del punto più lontano attuale)
+    if (distance < max_distance) {
+        // La posizione dell'ID del punto più lontano è max_index_id
+        // La posizione della DISTANZA è max_index_id + 1
+        
+        KNN[max_index_id] = (float)id;          // Inserisce il nuovo ID
+        KNN[max_index_id + 1] = distance;      // Inserisce la nuova distanza
+        
+        // NOTA: Il tuo algoritmo di pruning richiede solo la sostituzione.
+        // Per avere la lista *perfettamente* ordinata in ogni istante 
+        // (che non è strettamente necessario per la sola get_d_k_max),
+        // servirebbe un'operazione di riordino, ma il metodo attuale è il più efficiente.
+    }
+}
+//
+// ---------------------------------------------------------------
+//  QUERYING
+// ---------------------------------------------------------------
+float* querying(float *query, float *pivot, float *dataSet, float* vettoreIndexing) {
+    // KNN: [id1, d1, id2, d2, ..., idk, dk]
+    int dimensioneKnn = 2 * k;
+    float* KNN = malloc(sizeof(float) * dimensioneKnn);
+
+    // Inizializza KNN con id = -1 e distanze = FLT_MAX
+    for (int i = 0; i < k; i++) {
+        KNN[i*2] = -1;
+        KNN[i*2 + 1] = FLT_MAX;
+    }
+
+    // Calcola le distanze approssimate query -> pivot
+    float* distanzaApprossimataQP = malloc(sizeof(float) * h);
+    for (int i = 0; i < h; i++) {
+        float *pivotCuscinetto = &pivot[i * D];
+        distanzaApprossimataQP[i] = distanzaApprossimata(query, pivotCuscinetto);
+    }
+
+    // Scorri tutti i vettori del dataset
+    for (int i = 0; i < N; i++) {
+        float* vettore = &dataSet[i * D];
+        float d_pvt_max = 0.0f;
+
+        // Calcola lower-bound tramite pivot
+        for (int j = 0; j < h; j++) {
+            float d_vi_pj = vettoreIndexing[i * h + j];
+            float d_q_pj  = distanzaApprossimataQP[j];
+            float limiteInferiore = fabsf(d_vi_pj - d_q_pj);
+            if (limiteInferiore > d_pvt_max)
+                d_pvt_max = limiteInferiore;
+        }
+
+        float d_k_max = get_d_k_max(KNN, k);
+        if (d_pvt_max < d_k_max) {
+            // Calcola distanza approssimata punto-query
+            float d_q_v_approx = distanzaApprossimata(query, vettore);
+            if (d_q_v_approx < d_k_max) {
+                insert_into_knn(KNN, k, i, d_q_v_approx);
+            }
+        }
+    }
+
+    // Sostituisci le distanze approssimate con quelle euclidee reali
+    for (int i = 0; i < k; i++) {
+        int id = (int)KNN[i * 2];
+        if (id != -1) {
+            float* v_final = &dataSet[id * D];
+            float d_reale = dEuclidea(query, v_final);
+            KNN[i * 2 + 1] = d_reale;
+        }
+    }
+
+    free(distanzaApprossimataQP);
+    return KNN;
+}
+
 //
 // ---------------------------------------------------------------
 //  FUNZIONI DI TEST
@@ -424,6 +471,113 @@ void testIndexing() {
     free(IDX_real);
 }
 
+void testQuerying() {
+    printf("\n===== TEST querying =====\n");
+
+    // Genera dataset casuale
+    float *dataset = malloc(N * D * sizeof(float));
+    for (int i = 0; i < N; i++)
+        for (int j = 0; j < D; j++)
+            dataset[i*D + j] = ((float)rand() / RAND_MAX) * 20 - 10;
+
+    // Calcola i pivot
+    float *pivot = calcoloPivot(dataset, h, N, D);
+
+    // Costruisci indice approssimato
+    float *vettoreIndexing = indexing(pivot, dataset);
+
+    // Seleziona un vettore del dataset come query
+    float *query = malloc(D * sizeof(float));
+    for (int i = 0; i < D; i++)
+        query[i] = ((float)rand() / RAND_MAX) * 20 - 10;
+
+    printf("\nQuery casuale generata:\n");
+    for (int i = 0; i < D; i++) printf("%.3f ", query[i]);
+    printf("\n");
+
+    // Esegui querying
+    float *KNN = querying(query, pivot, dataset, vettoreIndexing);
+
+    // Stampa risultati
+    printf("\nK-NN trovati (id, distanza):\n");
+    for (int i = 0; i < k; i++) {
+        int id = (int)KNN[i * 2];
+        float dist = KNN[i * 2 + 1];
+        if (id != -1) {
+            printf("%d: %.4f\n", id, dist);
+        }
+    }
+
+    free(dataset);
+    free(pivot);
+    free(vettoreIndexing);
+    free(KNN);
+}
+// Confronta i vicini trovati da querying con quelli reali calcolati a distanza euclidea
+void testQueryingCompleto() {
+    printf("\n===== TEST querying COMPLETO =====\n");
+
+    // 1. Genera dataset casuale
+    float *dataset = malloc(N * D * sizeof(float));
+    for (int i = 0; i < N; i++)
+        for (int j = 0; j < D; j++)
+            dataset[i*D + j] = ((float)rand() / RAND_MAX) * 20 - 10;
+
+    // 2. Calcola pivot e indice
+    float *pivot = calcoloPivot(dataset, h, N, D);
+    float *vettoreIndexing = indexing(pivot, dataset);
+
+    // 3. Seleziona un vettore casuale come query
+    float *query = malloc(D * sizeof(float));
+    for (int i = 0; i < D; i++)
+        query[i] = ((float)rand() / RAND_MAX) * 20 - 10;
+
+    printf("\nQuery casuale generata:\n");
+    for (int i = 0; i < D; i++) printf("%.3f ", query[i]);
+    printf("\n");
+
+    // 4. Esegui querying
+    float *KNN = querying(query, pivot, dataset, vettoreIndexing);
+
+    printf("\nK-NN trovati da querying (id, distanza approssimata -> reale):\n");
+    for (int i = 0; i < k; i++) {
+        int id = (int)KNN[i * 2];
+        float dist = KNN[i * 2 + 1];
+        if (id != -1) {
+            printf("%d: %.4f\n", id, dist);
+        }
+    }
+
+    // 5. Calcola K-NN reali (distanza euclidea)
+    float *realDistances = malloc(N * sizeof(float));
+    for (int i = 0; i < N; i++) {
+        float *v = &dataset[i * D];
+        realDistances[i] = dEuclidea(query, v);
+    }
+
+    // Ordina e stampa i K vicini reali
+    printf("\nK-NN reali (distanza euclidea):\n");
+    for (int n = 0; n < k; n++) {
+        int min_idx = -1;
+        float min_val = FLT_MAX;
+        for (int i = 0; i < N; i++) {
+            if (realDistances[i] < min_val) {
+                min_val = realDistances[i];
+                min_idx = i;
+            }
+        }
+        if (min_idx != -1) {
+            printf("%d: %.4f\n", min_idx, min_val);
+            realDistances[min_idx] = FLT_MAX; // escludi già trovato
+        }
+    }
+
+    free(dataset);
+    free(pivot);
+    free(vettoreIndexing);
+    free(KNN);
+    free(realDistances);
+}
 
 //
 // ---------------------------------------------------------------
@@ -432,11 +586,12 @@ void testIndexing() {
 int main() {
 
     srand((unsigned)time(NULL));
-    printf(">>> VERSIONE CORRETTA COMPILATA <<<\n");
+    //printf(">>> VERSIONE CORRETTA COMPILATA <<<\n");
 
     //nomeFittizio();                
     //testDistanzaApprossimata();   
-    testIndexing();              
-
+    //testIndexing();
+    //testQuerying();              
+    testQueryingCompleto();
     return 0;
 }
