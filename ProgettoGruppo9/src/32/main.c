@@ -4,11 +4,11 @@
 #include <time.h>
 #include <math.h>
 
-static int N = 100; //Righe dataset
-static int D = 20; //Colonne dataset
-static int h = 3; // numero di pivot
-static int x = 5; // parametro di quantizzazione
-static int k = 5; // numero di vicini
+static int N = 10000; //Righe dataset
+static int D = 2000; //Colonne dataset
+static int h = 40; // numero di pivot
+static int x = 30; // parametro di quantizzazione
+static int k = 16; // numero di vicini
 
 #define FLT_MAX 3.402823466e+38F
 
@@ -310,34 +310,37 @@ float* querying(float *query, float *pivot, float *dataSet, float* vettoreIndexi
         float* vettore = &dataSet[i * D];
         float d_pvt_max = 0.0f;
 
-        // Calcola lower-bound tramite pivot
+        // Calcola lower-bound tramite pivot (disuguaglianza triangolare)
         for (int j = 0; j < h; j++) {
-            float d_vi_pj = vettoreIndexing[i * h + j];
-            float d_q_pj  = distanzaApprossimataQP[j];
-            float limiteInferiore = fabsf(d_vi_pj - d_q_pj);
+            float d_vi_pj = vettoreIndexing[i * h + j];  // distanza v->pivot (dall'indice)
+            float d_q_pj  = distanzaApprossimataQP[j];   // distanza query->pivot
+            float limiteInferiore = fabsf(d_vi_pj - d_q_pj);  // |d(v,p) - d(q,p)|
             if (limiteInferiore > d_pvt_max)
                 d_pvt_max = limiteInferiore;
         }
 
+        // Ottieni la distanza massima attuale nei K-NN
         float d_k_max = get_d_k_max(KNN, k);
+        
+        // PRIMO FILTRO: Se il limite inferiore è già troppo grande, scarta il punto
         if (d_pvt_max < d_k_max) {
-            // Calcola distanza approssimata punto-query
+            // SECONDO FILTRO: Calcola distanza approssimata per un filtro più preciso
             float d_q_v_approx = distanzaApprossimata(query, vettore);
+            
             if (d_q_v_approx < d_k_max) {
-                insert_into_knn(KNN, k, i, d_q_v_approx);
+                // TERZO FILTRO: Calcola la distanza REALE (euclidea)
+                float d_q_v_reale = dEuclidea(query, vettore);
+                
+                // Inserisci solo se la distanza reale è minore
+                if (d_q_v_reale < d_k_max) {
+                    insert_into_knn(KNN, k, i, d_q_v_reale);
+                }
             }
         }
     }
 
-    // Sostituisci le distanze approssimate con quelle euclidee reali
-    for (int i = 0; i < k; i++) {
-        int id = (int)KNN[i * 2];
-        if (id != -1) {
-            float* v_final = &dataSet[id * D];
-            float d_reale = dEuclidea(query, v_final);
-            KNN[i * 2 + 1] = d_reale;
-        }
-    }
+    // NON serve più ricalcolare le distanze: sono già euclidee!
+    // (rimuovi il loop finale che avevi)
 
     free(distanzaApprossimataQP);
     return KNN;
@@ -513,6 +516,7 @@ void testQuerying() {
     free(vettoreIndexing);
     free(KNN);
 }
+
 // Confronta i vicini trovati da querying con quelli reali calcolati a distanza euclidea
 void testQueryingCompleto() {
     printf("\n===== TEST querying COMPLETO =====\n");
@@ -531,10 +535,6 @@ void testQueryingCompleto() {
     float *query = malloc(D * sizeof(float));
     for (int i = 0; i < D; i++)
         query[i] = ((float)rand() / RAND_MAX) * 20 - 10;
-
-    printf("\nQuery casuale generata:\n");
-    for (int i = 0; i < D; i++) printf("%.3f ", query[i]);
-    printf("\n");
 
     // 4. Esegui querying
     float *KNN = querying(query, pivot, dataset, vettoreIndexing);
@@ -571,6 +571,41 @@ void testQueryingCompleto() {
             realDistances[min_idx] = FLT_MAX; // escludi già trovato
         }
     }
+    printf("\n=== VERIFICA: punti esclusi ===\n");
+    printf("Verifichiamo che tutti i punti esclusi siano più lontani...\n");
+    
+    float max_dist_knn = 0.0f;
+    for (int i = 0; i < k; i++) {
+        if (KNN[i*2+1] > max_dist_knn)
+            max_dist_knn = KNN[i*2+1];
+    }
+    
+    int errori = 0;
+    for (int i = 0; i < N; i++) {
+        // Controlla se questo punto è nei K-NN
+        int nei_knn = 0;
+        for (int j = 0; j < k; j++) {
+            if ((int)KNN[j*2] == i) {
+                nei_knn = 1;
+                break;
+            }
+        }
+        
+        if (!nei_knn) {
+            float *v = &dataset[i * D];
+            float dist = dEuclidea(query, v);
+            if (dist < max_dist_knn) {
+                printf("ERRORE: punto %d escluso ma ha distanza %.4f < %.4f\n", 
+                       i, dist, max_dist_knn);
+                errori++;
+            }
+        }
+    }
+    
+    if (errori == 0)
+        printf("✓ Nessun errore! Tutti i punti esclusi sono effettivamente più lontani.\n");
+    else
+        printf("✗ Trovati %d errori!\n", errori);
 
     free(dataset);
     free(pivot);
