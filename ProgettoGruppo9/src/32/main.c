@@ -113,75 +113,77 @@ float prodScalare(float *v, float *w) {
 // ---------------------------------------------------------------
 //  QUANTIZZAZIONE
 // ---------------------------------------------------------------
-static const float *arr_ctx;
-
-int comparatore(const void *a, const void *b) {
-    int i1 = *(int*)a;
-    int i2 = *(int*)b;
-
-    float v1 = fabsf(arr_ctx[i1]);
-    float v2 = fabsf(arr_ctx[i2]);
-
-    if (v1 < v2) return  1;
-    if (v1 > v2) return -1;
-    return 0;
-}
-
-
 void quantizing(float *v, float *vMinus, float *vPlus) {
-    /*printf("\nQuantizing di: ");
-        for (int i = 0; i < D; i++) 
-            printf("%.2f ", v[i]);
-            **/
-    int array_indici[D];
-    for (int i = 0; i < D; i++){
-        array_indici[i] = i;
-        vPlus[i] = 0; // azzero, per sicurezza
-        vMinus[i] = 0; // azzero, per sicurezza
-    }
-
-    arr_ctx = v;
-    qsort(array_indici, D, sizeof(int), comparatore);
-
-    // applico segno
-    for (int i = 0; i < D; i++)
-        if (v[array_indici[i]] < 0)
-            array_indici[i] = -array_indici[i];
-
-   /* printf("\nOrdine indici assoluti con segno: ");
-    for (int i = 0; i < D; i++)
-        printf("%d ", array_indici[i]);
-*/
-    if (x > D) {
-        fprintf(stderr, "ERRORE: richiesti %d massimi ma dataset ha dimensione %d\n", x, D);
-        return;
-    }
-
-    // assegno ai vettori plus/minus
-    for (int i = 0; i < x; i++) {
-        int idx = array_indici[i];
-        if (idx < 0)
-            vMinus[-idx] = 1;
-        else
-            vPlus[idx] = 1;
-    }
-
-    arr_ctx = NULL;
-/*
-    printf("\nTop-%d elementi per |valore|: ", x);
-    for (int k = 0; k < x; k++) 
-        printf("%d ", array_indici[k]);
-
-    printf("\nvPlus:  ");
-    for (int i = 0; i < D; i++)
-        printf("%.0f ", vPlus[i]);
-
-    printf("\nvMinus: ");
+  /*printf("\nQuantizing di: ");
     for (int i = 0; i < D; i++) 
-        printf("%.0f ", vMinus[i]);
+    printf("%.2f ", v[i]);
+   **/
+  int array_indici[D];
 
-    printf("\n");
-    */
+  for (int k = 0; k < D; k++) {
+    array_indici[k] = k;
+    vPlus[k] = 0; 
+    vMinus[k] = 0; 
+  }
+
+  // cerco X massimi
+  // O(X * D), se X <<<< D => O(D)
+  for (int i = 0; i < x; i++) {
+    int maxIndex = i; 
+    float maxVal = fabsf(v[array_indici[i]]);
+
+    // idea: quando trovo il massimo lo sposto alle prime posizioni e alla prossima iterazione seleziono da i + 1, saltando quelli già trovati
+    for (int j = i + 1; j < D; j++) {
+      float currentVal = fabsf(v[array_indici[j]]);
+
+      if (currentVal > maxVal) {
+        maxVal = currentVal;
+        maxIndex = j; 
+      }
+    }
+
+    int temp = array_indici[i];
+    array_indici[i] = array_indici[maxIndex];
+    array_indici[maxIndex] = temp;
+  }
+
+  for (int i = 0; i < x; i++) {
+    int idx = array_indici[i];
+    if (v[idx] < 0) {
+      array_indici[i] = -idx;
+    }
+  }
+
+
+  /* printf("\nOrdine indici assoluti con segno: ");
+     for (int i = 0; i < D; i++)
+     printf("%d ", array_indici[i]);
+     */
+
+  // assegno ai vettori plus/minus
+  for (int i = 0; i < x; i++) {
+    int idx = array_indici[i];
+    if (idx < 0)
+      vMinus[-idx] = 1;
+    else
+      vPlus[idx] = 1;
+  }
+
+  /*
+     printf("\nTop-%d elementi per |valore|: ", x);
+     for (int k = 0; k < x; k++) 
+     printf("%d ", array_indici[k]);
+
+     printf("\nvPlus:  ");
+     for (int i = 0; i < D; i++)
+     printf("%.0f ", vPlus[i]);
+
+     printf("\nvMinus: ");
+     for (int i = 0; i < D; i++) 
+     printf("%.0f ", vMinus[i]);
+
+     printf("\n");
+     */
 }
 float distanzaApprossimata(float *v, float *w) {
     // Alloco i vettori quantizzati
