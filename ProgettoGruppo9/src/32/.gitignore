@@ -1,3 +1,5 @@
 *.data.*
 *.o
 main
+quantpivot
+programma
