@@ -4,15 +4,20 @@
 #include <time.h>
 #include <math.h>
 
-int N; // Righe dataset
+static int N = 20001; // Righe dataset
+static int D = 2560;  // Colonne dataset
+static int D_padded;  // D con degli 0 ad ogni riga che portano a vettori multipli di 4 per le istruzioni Aligned di SSE
+static int h = 160;   // numero di pivot
+static int x = 640;   // parametro di quantizzazione
+static int k = 80;    // numero di vicini
 
-int D; // Colonne dataset
+extern float prodScalare(float *v, float *w, int D);
 
-int h; // numero di pivot
-
-int x; // parametro di quantizzazione
-
-int k; // numero di vicini
+// definisco i vettori in modo globale
+float *vPlus_all = NULL;
+float *vMinus_all = NULL;
+float *pPlus = NULL;
+float *pMinus = NULL;
 
 #define FLT_MAX 3.402823466e+38F
 
@@ -29,7 +34,7 @@ float distanzaApprossimata(float *v, float *w, float *vMinus, float *vPlus, floa
 
 float *indexing(float *p, float *v);
 float dEuclidea(float *v, float *w);
-float prodScalare(float *v, float *w);
+// float prodScalare(float *v, float *w);
 
 void quantizing(float *v, float *vMinus, float *vPlus);
 
@@ -40,6 +45,8 @@ void testDistanzaApprossimata();
 void testQueryingCompleto();
 
 float *querying(float *query, float *pivot, float *dataSet, float *vettoreIndexing);
+
+void preQuantizeDataset(float *dataset);
 
 //
 // ---------------------------------------------------------------
@@ -99,15 +106,13 @@ float dEuclidea(float *v, float *w)
 // ---------------------------------------------------------------
 //  PRODOTTO SCALARE
 // ---------------------------------------------------------------
-float prodScalare(float *v, float *w)
-{
-  float prod = 0.0f;
-  for (int i = 0; i < D; i++)
-  {
-    prod += v[i] * w[i];
-  }
-  return prod;
-}
+// float prodScalare(float *v, float *w) {
+//    float prod = 0.0f;
+//    for (int i = 0; i < D; i++) {
+//        prod += v[i] * w[i];
+//    }
+//    return prod;
+//}
 
 //
 // ---------------------------------------------------------------
@@ -175,12 +180,10 @@ void quantizing(float *v, float *vMinus, float *vPlus)
 float distanzaApprossimata(float *v, float *w, float *vMinus, float *vPlus, float *wMinus, float *wPlus)
 {
 
-  // === PUNTO CRITICO CORRETTO ===
-  // I buffer vengono passati allocati ma vuoti (o sporchi).
-  // Dobbiamo chiamare quantizing qui per riempirli con i dati correnti di v e w.
-  quantizing(v, vMinus, vPlus);
-  quantizing(w, wMinus, wPlus);
-  // ==============================
+  float posPos = prodScalare(vPlus, wPlus, D);
+  float negNeg = prodScalare(vMinus, wMinus, D);
+  float posNeg = prodScalare(vPlus, wMinus, D);
+  float negPos = prodScalare(vMinus, wPlus, D);
 
   float posPos = prodScalare(vPlus, wPlus);
   float negNeg = prodScalare(vMinus, wMinus);
@@ -206,24 +209,23 @@ float *estraiRiga(float *v, int idx)
 // ---------------------------------------------------------------
 //  INDEXING
 // ---------------------------------------------------------------
-float *indexing(float *p, float *v)
-{
-  float *output = malloc(N * h * sizeof(float));
+/*
+float* indexing(float *p, float *v) {
+    float *output = malloc(N * h * sizeof(float));
 
-  // Allocazione buffer una tantum
-  float *buf_vMinus = malloc(D * sizeof(float));
-  float *buf_vPlus = malloc(D * sizeof(float));
-  float *buf_wMinus = malloc(D * sizeof(float));
-  float *buf_wPlus = malloc(D * sizeof(float));
+    // Allocazione buffer una tantum
+    float *buf_vMinus = malloc(D * sizeof(float));
+    float *buf_vPlus  = malloc(D * sizeof(float));
+    float *buf_wMinus = malloc(D * sizeof(float));
+    float *buf_wPlus  = malloc(D * sizeof(float));
 
-  for (int r = 0; r < N; r++)
-  {
-    float *vettore = &v[r * D];
-    for (int c = 0; c < h; c++)
-    {
-      float *vPivot = &p[c * D];
-      // Passaggio buffer
-      output[r * h + c] = distanzaApprossimata(vettore, vPivot, buf_vMinus, buf_vPlus, buf_wMinus, buf_wPlus);
+    for (int r = 0; r < N; r++) {
+        float *vettore = &v[r * D];
+        for (int c = 0; c < h; c++) {
+            float *vPivot = &p[c * D];
+            // Passaggio buffer
+            output[r * h + c] = distanzaApprossimata(vettore, vPivot, buf_vMinus, buf_vPlus, buf_wMinus, buf_wPlus);
+        }
     }
   }
 
@@ -233,6 +235,8 @@ float *indexing(float *p, float *v)
   free(buf_wPlus);
   return output;
 }
+
+*/
 
 float get_d_k_max(float *KNN, int k)
 {
@@ -245,7 +249,8 @@ float get_d_k_max(float *KNN, int k)
       max_distance = current_distance;
     }
   }
-  return max_distance;
+}
+return max_distance;
 }
 
 void insert_into_knn(float *KNN, int k, int id, float distance)
@@ -344,6 +349,138 @@ float *querying(float *query, float *pivot, float *dataSet, float *vettoreIndexi
   free(buf_wMinus);
   free(buf_wPlus);
   return KNN;
+}
+void preQuantizeDataset(float *dataset)
+{
+  // Il suo scopo è quello di allocare due "matrici" memorizzate come array per contenere le versioni quantizzate di tutti i vettori del dataset
+  vPlus_all = malloc(N * D * sizeof(float));
+  vMinus_all = malloc(N * D * sizeof(float));
+  for (int i = 0; i < N; i++)
+  {
+    // Per ogni vettore del dataset, lo quantizzo e lo aggiungo ai vettori dei quantizzati
+    float *v = &dataset[i * D];
+    float *vp = &vPlus_all[i * D];
+    float *vm = &vMinus_all[i * D];
+    quantizing(v, vm, vp);
+  }
+}
+void preQuantizePivots(float *pivot)
+{
+  // Segue la stessa logica della funzione che prequantizza il dataset
+  pPlus = malloc(h * D * sizeof(float));
+  pMinus = malloc(h * D * sizeof(float));
+  for (int i = 0; i < h; i++)
+  {
+    float *p = &pivot[i * D];
+    float *pp = &pPlus[i * D];
+    float *pm = &pMinus[i * D];
+    quantizing(p, pm, pp);
+  }
+}
+float distanzaApprossimataPreQ(float *vPlus, float *vMinus, float *wPlus, float *wMinus)
+{
+  float posPos = prodScalare(vPlus, wPlus, D);
+  float negNeg = prodScalare(vMinus, wMinus, D);
+  float posNeg = prodScalare(vPlus, wMinus, D);
+  float negPos = prodScalare(vMinus, wPlus, D);
+  return posPos + negNeg - posNeg - negPos;
+}
+float *indexing(float *pivot, float *dataset)
+{
+  // È necessario aver prequantizzato i pivot ed il dataset per usare questa funzione
+  float *output = malloc(N * h * sizeof(float));
+  for (int r = 0; r < N; r++)
+  {
+    float *vPlus = &vPlus_all[r * D];
+    float *vMinus = &vMinus_all[r * D];
+    for (int c = 0; c < h; c++)
+    {
+      float *pPlusC = &pPlus[c * D];
+      float *pMinusC = &pMinus[c * D];
+      output[r * h + c] = distanzaApprossimataPreQ(vPlus, vMinus, pPlusC, pMinusC);
+    }
+  }
+  return output;
+}
+float *querying2(float *query, float *pivot, float *dataSet, float *vettoreIndexing)
+{
+  // quantizza la query
+  float *qPlus = malloc(D * sizeof(float));
+  float *qMinus = malloc(D * sizeof(float));
+  quantizing(query, qMinus, qPlus);
+  // calcola d(q,p) per ogni pivot
+  float *dQP = malloc(h * sizeof(float));
+  for (int j = 0; j < h; j++)
+  {
+    float *pPlusC = &pPlus[j * D];
+    float *pMinusC = &pMinus[j * D];
+    dQP[j] = distanzaApprossimataPreQ(qPlus, qMinus, pPlusC, pMinusC);
+  }
+  // Preparo il KNN
+  int dim = 2 * k;
+  float *KNN = malloc(dim * sizeof(float));
+  for (int i = 0; i < k; i++)
+  {
+    KNN[2 * i] = -1;
+    KNN[2 * i + 1] = FLT_MAX;
+  }
+  // Itero sul dataset
+  for (int i = 0; i < N; i++)
+  {
+    float best_lb = 0.0f;
+    for (int j = 0; j < h; j++)
+    {
+      float d_vi_pj = vettoreIndexing[i * h + j];
+      float lb = fabsf(d_vi_pj - dQP[j]);
+      if (lb > best_lb)
+        best_lb = lb;
+    }
+    float d_k_max = get_d_k_max(KNN, k);
+    if (best_lb >= d_k_max)
+      continue;
+    float *vPlus = &vPlus_all[i * D];
+    float *vMinus = &vMinus_all[i * D];
+    float d_q_v_approx = distanzaApprossimataPreQ(qPlus, qMinus, vPlus, vMinus);
+    if (d_q_v_approx >= d_k_max)
+      continue; // non considero il vettore
+
+    // Calcolo distanza reale
+    float *v = &dataSet[i * D];
+    float d_q_v_real = dEuclidea(query, v);
+
+    if (d_q_v_real < d_k_max)
+    {
+      insert_into_knn(KNN, k, i, d_q_v_real);
+    }
+  }
+  free(qPlus);
+  free(qMinus);
+  free(dQP);
+  return KNN;
+}
+
+void freePreQuantization()
+{
+  if (vPlus_all)
+  {
+    free(vPlus_all);
+    vPlus_all = NULL;
+  }
+  if (vMinus_all)
+  {
+    free(vMinus_all);
+    vMinus_all = NULL;
+  }
+  if (pPlus)
+  {
+    free(pPlus);
+    pPlus = NULL;
+  }
+  if (pMinus)
+  {
+    free(pMinus);
+    pMinus = NULL;
+  }
 }
 
 //
@@ -478,86 +615,181 @@ void testQueryingCompleto()
 {
   printf("\n===== TEST querying COMPLETO =====\n");
 
-  // 1. Genera dataset
-  float *dataset = malloc(N * D * sizeof(float));
+  // 1. Genera dataset casuale
+  int padding = (D % 4) == 0 ? 0 : 4 - (D % 4);
+  D_padded = D + padding;
+  float *dataset = calloc(N * D_padded, sizeof(float));
+  if (!dataset)
+  {
+    fprintf(stderr, "Errore allocazione dataset!\n");
+    return;
+  }
+
   for (int i = 0; i < N; i++)
     for (int j = 0; j < D; j++)
       dataset[i * D + j] = ((float)rand() / RAND_MAX) * 20 - 10;
 
-  // 2. Calcola pivot e indice
+  // 2. Calcola pivot e pre-quantizzazione
   float *pivot = calcoloPivot(dataset, h, N, D);
-  float *vettoreIndexing = indexing(pivot, dataset);
+  if (!pivot)
+  {
+    fprintf(stderr, "Errore calcolo pivot!\n");
+    free(dataset);
+    return;
+  }
 
-  // 3. Query casuale
+  preQuantizeDataset(dataset);
+  preQuantizePivots(pivot);
+
+  // 3. Costruisci indice
+  float *vettoreIndexing = indexing(pivot, dataset);
+  if (!vettoreIndexing)
+  {
+    fprintf(stderr, "Errore indexing!\n");
+    free(dataset);
+    free(pivot);
+    freePreQuantization();
+    return;
+  }
+
+  // 4. Genera query casuale
   float *query = malloc(D * sizeof(float));
+  if (!query)
+  {
+    fprintf(stderr, "Errore allocazione query!\n");
+    free(dataset);
+    free(pivot);
+    free(vettoreIndexing);
+    freePreQuantization();
+    return;
+  }
+
   for (int i = 0; i < D; i++)
     query[i] = ((float)rand() / RAND_MAX) * 20 - 10;
 
-  // 4. Querying
-  float *KNN = querying(query, pivot, dataset, vettoreIndexing);
+  // 5. Esegui KNN approssimato
+  float *KNN = querying2(query, pivot, dataset, vettoreIndexing);
+  if (!KNN)
+  {
+    fprintf(stderr, "Errore querying!\n");
+    free(dataset);
+    free(pivot);
+    free(vettoreIndexing);
+    free(query);
+    freePreQuantization();
+    return;
+  }
 
-  printf("\nK-NN trovati da querying (id, distanza approssimata -> reale):\n");
+  printf("\nK-NN trovati da querying (id, distanza reale):\n");
   for (int i = 0; i < k; i++)
   {
     int id = (int)KNN[i * 2];
     float dist = KNN[i * 2 + 1];
     if (id != -1)
-    {
       printf("%d: %.4f\n", id, dist);
-    }
   }
 
-  // 5. Verifica con Euclidea pura
+  // 6. Calcola distanze euclidee reali - USA UN ARRAY SEPARATO
   float *realDistances = malloc(N * sizeof(float));
+  if (!realDistances)
+  {
+    fprintf(stderr, "Errore allocazione realDistances!\n");
+    free(dataset);
+    free(pivot);
+    free(vettoreIndexing);
+    free(KNN);
+    free(query);
+    freePreQuantization();
+    return;
+  }
+
+  // CALCOLA TUTTE LE DISTANZE
   for (int i = 0; i < N; i++)
   {
     float *v = &dataset[i * D];
     realDistances[i] = dEuclidea(query, v);
   }
 
-  // Trova max distance nel KNN trovato
+  // 7. Crea una COPIA per l'ordinamento
+  float *sortedDistances = malloc(N * sizeof(float));
+  if (!sortedDistances)
+  {
+    fprintf(stderr, "Errore allocazione sortedDistances!\n");
+    free(realDistances);
+    free(dataset);
+    free(pivot);
+    free(vettoreIndexing);
+    free(KNN);
+    free(query);
+    freePreQuantization();
+    return;
+  }
+  memcpy(sortedDistances, realDistances, N * sizeof(float));
+
+  printf("\nK-NN reali (distanza euclidea):\n");
+  for (int n = 0; n < k; n++)
+  {
+    int min_idx = -1;
+    float min_val = FLT_MAX;
+    for (int i = 0; i < N; i++)
+    {
+      if (sortedDistances[i] < min_val)
+      {
+        min_val = sortedDistances[i];
+        min_idx = i;
+      }
+    }
+    if (min_idx != -1)
+    {
+      printf("%d: %.4f\n", min_idx, min_val);
+      sortedDistances[min_idx] = FLT_MAX;
+    }
+  }
+
+  // 8. Verifica errori - USA realDistances ORIGINALE
   float max_dist_knn = 0.0f;
   for (int i = 0; i < k; i++)
-  {
     if (KNN[i * 2 + 1] > max_dist_knn)
       max_dist_knn = KNN[i * 2 + 1];
-  }
 
   int errori = 0;
   for (int i = 0; i < N; i++)
   {
-    // Controllo se i non è in KNN
     int in_knn = 0;
     for (int j = 0; j < k; j++)
-    {
       if ((int)KNN[j * 2] == i)
       {
         in_knn = 1;
         break;
       }
-    }
 
     if (!in_knn)
     {
-      if (realDistances[i] < max_dist_knn)
+      // USA realDistances che non è stato modificato!
+      float dist = realDistances[i];
+      if (dist < max_dist_knn)
       {
-        // printf("Errore: punto %d ha distanza %.4f < %.4f (max KNN)\n", i, realDistances[i], max_dist_knn);
+        printf("ERRORE: punto %d escluso ma distanza %.4f < %.4f\n",
+               i, dist, max_dist_knn);
         errori++;
       }
     }
   }
 
   if (errori == 0)
-    printf("\n✓ Nessun errore! I punti esclusi sono effettivamente più lontani.\n");
+    printf("✓ Nessun errore! Tutti i punti esclusi sono effettivamente più lontani.\n");
   else
-    printf("\n✗ Trovati %d punti che dovevano essere inclusi!\n", errori);
+    printf("✗ Trovati %d errori!\n", errori);
 
+  // 9. Libera memoria
+  free(sortedDistances);
+  free(realDistances);
   free(dataset);
   free(pivot);
   free(vettoreIndexing);
   free(KNN);
-  free(realDistances);
   free(query);
+  freePreQuantization();
 }
 
 //
