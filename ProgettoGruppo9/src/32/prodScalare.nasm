@@ -27,8 +27,7 @@ prodScalare:
     mov ecx, [ebp + 16]     ;  n 
 
     mov edx, ecx            ; Copia n in EDX
-    shr edx, 2     
-    shl edx, 4      
+    shl edx, 2              ; n * 4
     
     ; --- SETUP INIZIALE ---
     ; Suggerimento: Azzera il registro accumulatore qui.
@@ -36,32 +35,17 @@ prodScalare:
     XORPS XMM0, XMM0
     XOR EAX, EAX ; i = 0
     cmp edx, 0
-    je fine_ciclo_
+    je fine_procedura_
 ciclo_: 
-    MOVUPS XMM1, [ESI + EAX] ;A[i], A[i+1], A[i+2] e A[i+3]
-    MOVUPS XMM2, [EDI + EAX] ;B[i], B[i+1], B[i+2] e B[i+3]
+    MOVAPS XMM1, [ESI + EAX] ;A[i], A[i+1], A[i+2] e A[i+3]
+    MOVAPS XMM2, [EDI + EAX] ;B[i], B[i+1], B[i+2] e B[i+3]
     MULPS XMM1, XMM2
     ADDPS XMM0, XMM1 ; prod += A[I] * B[I]
     ADD EAX, 16
     CMP EAX, EDX
     JL ciclo_
-fine_ciclo_: 
-; 3. Gestione del resto (ciclo scalare per gli ultimi n % 4 elementi)
     HADDPS XMM0, XMM0
     HADDPS XMM0, XMM0
-    mov edx, ecx
-    shl edx, 2
-
-ciclo_resto_:
-    cmp eax, edx                ; L'offset corrente ha raggiunto la fine?
-    jge fine_procedura_
-    movss xmm1, [esi + eax]     
-    mulss xmm1, [edi + eax]    
-    addss xmm0, xmm1          
-
-    add eax, 4                  ; Avanza di 4 byte (1 float)
-    jmp ciclo_resto_
-
 fine_procedura_: 
     sub esp, 4                  
     movss [esp], xmm0           

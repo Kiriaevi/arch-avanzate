@@ -4,8 +4,9 @@
 #include <time.h>
 #include <math.h>
 
-static int N = 20000; //Righe dataset
+static int N = 20001; //Righe dataset
 static int D = 2560;  //Colonne dataset
+static int D_padded;  // D con degli 0 ad ogni riga che portano a vettori multipli di 4 per le istruzioni Aligned di SSE
 static int h = 160;    // numero di pivot
 static int x = 640;    // parametro di quantizzazione
 static int k = 80;    // numero di vicini
@@ -69,15 +70,8 @@ float* calcoloPivot(float *dataSet, int h, int N, int D) {
   int k = 0;
 
     for (int i = 0; i < N && k < h; i += offset) {
-        for (int j = 0; j < D; j+=8) {
+        for (int j = 0; j < D; j++) {
             pivot[k*D + j] = dataSet[i*D + j];
-            pivot[k*D + j+1] = dataSet[i*D + j+1];
-            pivot[k*D + j+2] = dataSet[i*D + j+2];
-            pivot[k*D + j+3] = dataSet[i*D + j+3];
-            pivot[k*D + j+4] = dataSet[i*D + j+4];
-            pivot[k*D + j+5] = dataSet[i*D + j+5];
-            pivot[k*D + j+6] = dataSet[i*D + j+6];
-            pivot[k*D + j+7] = dataSet[i*D + j+7];
         }
         k++;
     }
@@ -573,7 +567,9 @@ void testQueryingCompleto() {
     printf("\n===== TEST querying COMPLETO =====\n");
     
     // 1. Genera dataset casuale
-    float *dataset = malloc(N * D * sizeof(float));
+    int padding = (D % 4) == 0 ? 0 : 4 - (D % 4);
+    D_padded = D + padding;
+    float *dataset = calloc(N * D_padded,sizeof(float));
     if (!dataset) { 
         fprintf(stderr, "Errore allocazione dataset!\n"); 
         return; 
