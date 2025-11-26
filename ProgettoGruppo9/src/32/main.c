@@ -185,11 +185,6 @@ float distanzaApprossimata(float *v, float *w, float *vMinus, float *vPlus, floa
   float posNeg = prodScalare(vPlus, wMinus, D);
   float negPos = prodScalare(vMinus, wPlus, D);
 
-  float posPos = prodScalare(vPlus, wPlus);
-  float negNeg = prodScalare(vMinus, wMinus);
-  float posNeg = prodScalare(vPlus, wMinus);
-  float negPos = prodScalare(vMinus, wPlus);
-
   float approx = posPos + negNeg - posNeg - negPos;
 
   return approx;
@@ -249,7 +244,6 @@ float get_d_k_max(float *KNN, int k)
       max_distance = current_distance;
     }
   }
-}
 return max_distance;
 }
 
