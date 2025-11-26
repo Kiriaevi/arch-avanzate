@@ -3,3 +3,5 @@
 main
 quantpivot
 programma
+*.out.*
+valgrind.txt
