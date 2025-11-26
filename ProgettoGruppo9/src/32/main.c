@@ -179,6 +179,13 @@ void quantizing(float *v, float *vMinus, float *vPlus)
 float distanzaApprossimata(float *v, float *w, float *vMinus, float *vPlus, float *wMinus, float *wPlus)
 {
 
+  // === PUNTO CRITICO CORRETTO ===
+  // I buffer vengono passati allocati ma vuoti (o sporchi).
+  // Dobbiamo chiamare quantizing qui per riempirli con i dati correnti di v e w.
+  quantizing(v, vMinus, vPlus);
+  quantizing(w, wMinus, wPlus);
+  // ==============================
+
   float posPos = prodScalare(vPlus, wPlus, D);
   float negNeg = prodScalare(vMinus, wMinus, D);
   float posNeg = prodScalare(vPlus, wMinus, D);
@@ -221,13 +228,12 @@ float* indexing(float *p, float *v) {
             output[r * h + c] = distanzaApprossimata(vettore, vPivot, buf_vMinus, buf_vPlus, buf_wMinus, buf_wPlus);
         }
     }
-  }
 
-  free(buf_vMinus);
-  free(buf_vPlus);
-  free(buf_wMinus);
-  free(buf_wPlus);
-  return output;
+    free(buf_vMinus);
+    free(buf_vPlus);
+    free(buf_wMinus);
+    free(buf_wPlus);
+    return output;
 }
 
 */
@@ -243,7 +249,7 @@ float get_d_k_max(float *KNN, int k)
       max_distance = current_distance;
     }
   }
-return max_distance;
+  return max_distance;
 }
 
 void insert_into_knn(float *KNN, int k, int id, float distance)
@@ -787,22 +793,22 @@ void testQueryingCompleto()
 // ---------------------------------------------------------------
 //  MAIN
 // ---------------------------------------------------------------
-int main(int argc, char *argv[])
+int main(int argc, char **argv)
 {
   srand((unsigned)time(NULL));
-  if (argc == 1)
+  if (argc != 6)
   {
-    printf("Inserire 4 valori validi per numero righe, numero colonne, numero "
-           "di pivot,parametro di quantizzazione, nuemro di vicini");
+    printf("Inserisci numero di valori appropritato");
   }
-  if (argc == 6)
-  {
-    N = atoi(argv[1]);
-    D = atoi(argv[2]);
-    h = atoi(argv[3]);
-    x = atoi(argv[4]);
-    k = atoi(argv[5]);
-  }
+  N = atoi(argv[1]);
+  D = atoi(argv[2]);
+  h = atoi(argv[3]);
+  x = atoi(argv[4]);
+  k = atoi(argv[5]);
+
+  // nomeFittizio();
+  // testDistanzaApprossimata();
+  // testIndexing();
   testQueryingCompleto();
   return 0;
 }

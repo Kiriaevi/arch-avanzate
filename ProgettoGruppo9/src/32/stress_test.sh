@@ -1,72 +1,56 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-OUTPUT_BIN="main"
-COMPILE_CMD="gcc -z noexecstack -no-pie main.c operazioniVettoriali.c quantize.c -Iinclude -o main "
-TEST_CASES=(
-  "100 10 5 4 5"
-  "500 20 10 8 10"
-  "1000 50 20 10 20"
-  "2000 64 30 16 50"
-  "5000 128 40 32 50"
-)
-
-print_header() {
-  printf "\n"
-  printf "=================================================================\n"
-  printf "  SYSTEM PROFILING AND TESTING SUITE\n"
-  printf "=================================================================\n"
-}
-
-print_separator() {
-  printf "-----------------------------------------------------------------\n"
-}
-
-print_header
-printf "Phase 1: Build Process\n"
-print_separator
-
-printf "Executing: %s\n" "$COMPILE_CMD"
-$COMPILE_CMD
-
-if [ $? -ne 0 ]; then
-  printf "\n[FATAL ERROR] Compilation failed. Aborting process.\n"
-  exit 1
+# COMPILAZIONE .nasm (se presenti)
+shopt -s nullglob
+NASM_FILES=( *.nasm )
+if [ ${#NASM_FILES[@]} -gt 0 ]; then
+  echo "Compilazione file .nasm..."
+  for f in "${NASM_FILES[@]}"; do
+    echo " nasm -f elf32 -DPIC $f"
+    nasm -f elf32 -DPIC "$f"
+  done
 else
-  printf "Build status: SUCCESS\n"
+  echo "Nessun .nasm trovato, salto fase nasm."
 fi
 
-printf "\nPhase 2: Execution Profiling\n"
-print_separator
+echo "Compilo mai.c..."
+gcc -msse -m32 -O0 -fPIC -z noexecstack *.o main.c -o quantpivot -lm
 
-printf "%-5s | %-6s | %-6s | %-6s | %-6s | %-6s | %-10s\n" "ID" "N" "D" "h" "x" "k" "RESULT"
-print_separator
+# --- CONFIGURAZIONI (modificare a piacere) ---
+Ns=(2063 10001 20003)     # valori di esempio per N (righe)
+Ds=(513 1025)          # dimensioni D (colonne)
+hs=(8 16)              # numero di pivot
+xs=(9 17 64)              # parametro di quantizzazione
+ks=(5 7 10)              # numero di vicini k
+# ---------------------------------------------
 
-test_id=1
-for config in "${TEST_CASES[@]}"; do
-  read -r n_val d_val h_val x_val k_val <<<"$config"
+mkdir -p logs
+summary="logs/summary.csv"
+echo "N,D,h,x,k,exit_code,errors" > "$summary"
 
-  ./$OUTPUT_BIN $n_val $d_val $h_val $x_val $k_val >/dev/null 2>&1
+for N in "${Ns[@]}"; do
+  for D in "${Ds[@]}"; do
+    for h in "${hs[@]}"; do
+      for x in "${xs[@]}"; do
+        for k in "${ks[@]}"; do
+          echo "=== Run: N=$N D=$D h=$h x=$x k=$k ==="
+          logfile="logs/run_N${N}_D${D}_h${h}_x${x}_k${k}.log"
 
-  exit_code=$?
+          if ./quantpivot "$N" "$D" "$h" "$x" "$k" > "$logfile" 2>&1; then
+            exitcode=0
+          else
+            exitcode=$?
+          fi
 
-  if [ $exit_code -eq 0 ]; then
-    status="PASS"
-  else
-    status="FAIL ($exit_code)"
-  fi
+          errors=$(grep -Eo "Trovati [0-9]+ errori!" "$logfile" | grep -Eo "[0-9]+" || echo 0)
 
-  printf "%-5d | %-6d | %-6d | %-6d | %-6d | %-6d | %-10s\n" \
-    "$test_id" "$n_val" "$d_val" "$h_val" "$x_val" "$k_val" "$status"
-
-  if [ $exit_code -ne 0 ]; then
-    print_separator
-    printf "[CRITICAL] Test case #%d failed. Halting execution.\n" "$test_id"
-    exit 1
-  fi
-
-  ((test_id++))
+          echo "${N},${D},${h},${x},${k},${exitcode},${errors}" >> "$summary"
+        done
+      done
+    done
+  done
 done
 
-print_separator
-printf "Summary: All %d configurations executed successfully.\n" "$((test_id - 1))"
-printf "=================================================================\n\n"
+echo "Tutti i test completati. Summary: $summary"
+echo "Log per run nella cartella logs/"
