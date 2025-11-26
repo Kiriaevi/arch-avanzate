@@ -4,12 +4,11 @@
 #include <time.h>
 #include <math.h>
 
-static int N = 20001; // Righe dataset
-static int D = 2560;  // Colonne dataset
-static int D_padded;  // D con degli 0 ad ogni riga che portano a vettori multipli di 4 per le istruzioni Aligned di SSE
-static int h = 160;   // numero di pivot
-static int x = 640;   // parametro di quantizzazione
-static int k = 80;    // numero di vicini
+static int N = 2000; // Righe dataset
+static int D = 256;  // Colonne dataset
+static int h = 16;   // numero di pivot
+static int x = 64;   // parametro di quantizzazione
+static int k = 8;    // numero di vicini
 
 extern float prodScalare(float *v, float *w, int D);
 
@@ -610,9 +609,7 @@ void testQueryingCompleto()
   printf("\n===== TEST querying COMPLETO =====\n");
 
   // 1. Genera dataset casuale
-  int padding = (D % 4) == 0 ? 0 : 4 - (D % 4);
-  D_padded = D + padding;
-  float *dataset = calloc(N * D_padded, sizeof(float));
+  float *dataset = malloc(N * D *  sizeof(float));
   if (!dataset)
   {
     fprintf(stderr, "Errore allocazione dataset!\n");

@@ -1,54 +1,53 @@
 section .text
 global prodScalare
 
-; Firma C: float prodScalare(float *arr1, float *arr2, int n);
+; float prodScalare(float *arr1, float *arr2, int n)
 prodScalare:
-    
-    ; --- PROLOGO ---
     push    rbp
     mov     rbp, rsp
 
-    ; --- MAPPING ARGOMENTI (System V AMD64 ABI) ---
-    ; RDI = Argomento 1: arr1 (float*)
-    ; RSI = Argomento 2: arr2 (float*)
-    ; EDX = Argomento 3: n (int)  <-- Nota: gli int sono 32bit, usiamo la parte bassa di RDX
+    ; Input: RDI=arr1, RSI=arr2, EDX=n
 
-    ; --- CALCOLO LIMITE ---
-    ; Estendiamo n (32bit) a 64bit per sicurezza matematica sui puntatori
-    movsxd  rax, edx        ; Copia n in RAX con sign-extension
-    shl     rax, 2          ; RAX = n * 4 (Dimensione totale in Byte)
-    mov     rcx, rax        ; Spostiamo il limite in RCX per liberare RAX per l'indice
+    movsxd  rcx, edx        ; RCX = n (esteso a 64 bit)
+    shl     rcx, 2     
+    mov     rdx, rcx    
+    shr     rdx, 4       
+    shl     rdx, 4          
+    xorps   xmm0, xmm0     
+    xor     rax, rax        ; Indice i = 0
 
-    ; --- SETUP ---
-    xorps   xmm0, xmm0      ; Azzera accumulatore
-    xor     rax, rax        ; i = 0 (usiamo RAX come indice a 64 bit)
+; --- Ciclo Vettoriale (SSE) ---
+ciclo_vett:
+    cmp     rax, rdx        ; Confronta con il LIMITE VETTORIALE (sicuro)
+    jge     fine_vett       ; Se abbiamo finito i blocchi da 4, esci
 
-    cmp     rcx, 0
-    je      fine_procedura_
+    movups  xmm1, [rdi + rax]
+    movups  xmm2, [rsi + rax]
+    mulps   xmm1, xmm2
+    addps   xmm0, xmm1
 
-ciclo_:
-    ; Nota: Uso MOVAPS (Aligned) come nel tuo esempio. 
-    ; Funziona SOLO se i puntatori RDI e RSI sono allineati a 16 byte.
-    ; Se crasha, cambia in MOVUPS.
-    
-    movaps  xmm1, [rdi + rax]   ; Leggi da arr1 (Base RDI + Indice RAX)
-    movaps  xmm2, [rsi + rax]   ; Leggi da arr2 (Base RSI + Indice RAX)
-    
-    mulps   xmm1, xmm2          ; Moltiplica
-    addps   xmm0, xmm1          ; Accumula
+    add     rax, 16
+    jmp     ciclo_vett
 
-    add     rax, 16             ; Avanza indice di 16 byte
-    cmp     rax, rcx            ; Confronta indice con limite
-    jl      ciclo_
+fine_vett:
+    ; Riduciamo i 4 risultati parziali in 1 PRIMA di aggiungere il resto
+    haddps  xmm0, xmm0
+    haddps  xmm0, xmm0
 
-    ; --- RIDUZIONE ORIZZONTALE ---
-    haddps  xmm0, xmm0          ; 4 -> 2 somme
-    haddps  xmm0, xmm0          ; 2 -> 1 somma (Il risultato è in XMM0 basso)
+; --- Ciclo Scalare (Resto) ---
+; RAX riparte esattamente da dove si è fermato il ciclo vettoriale
+ciclo_scalare:
+    cmp     rax, rcx        ; Confronta con il LIMITE TOTALE
+    jge     fine
 
-fine_procedura_:
-    ; --- EPILOGO ---
-    ; In 64-bit, i float si ritornano in XMM0. 
-    ; Non serve fare nulla con lo stack o FLD.
-    
+    movss   xmm1, [rdi + rax]
+    movss   xmm2, [rsi + rax]
+    mulss   xmm1, xmm2
+    addss   xmm0, xmm1      ; Aggiunge al totale
+
+    add     rax, 4
+    jmp     ciclo_scalare
+
+fine:
     pop     rbp
     ret
