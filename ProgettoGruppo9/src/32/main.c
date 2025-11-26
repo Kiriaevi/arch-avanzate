@@ -4,12 +4,12 @@
 #include <time.h>
 #include <math.h>
 
-static int N = 20001; // Righe dataset
-static int D = 2560;  // Colonne dataset
-static int D_padded;  // D con degli 0 ad ogni riga che portano a vettori multipli di 4 per le istruzioni Aligned di SSE
-static int h = 160;   // numero di pivot
-static int x = 640;   // parametro di quantizzazione
-static int k = 80;    // numero di vicini
+int N;        // Righe dataset
+int D;        // Colonne dataset
+int D_padded; // D con degli 0 ad ogni riga che portano a vettori multipli di 4 per le istruzioni Aligned di SSE
+int h;        // numero di pivot
+int x;        // parametro di quantizzazione
+int k;        // numero di vicini
 
 extern float prodScalare(float *v, float *w, int D);
 
@@ -180,15 +180,17 @@ void quantizing(float *v, float *vMinus, float *vPlus)
 float distanzaApprossimata(float *v, float *w, float *vMinus, float *vPlus, float *wMinus, float *wPlus)
 {
 
+  // === PUNTO CRITICO CORRETTO ===
+  // I buffer vengono passati allocati ma vuoti (o sporchi).
+  // Dobbiamo chiamare quantizing qui per riempirli con i dati correnti di v e w.
+  quantizing(v, vMinus, vPlus);
+  quantizing(w, wMinus, wPlus);
+  // ==============================
+
   float posPos = prodScalare(vPlus, wPlus, D);
   float negNeg = prodScalare(vMinus, wMinus, D);
   float posNeg = prodScalare(vPlus, wMinus, D);
   float negPos = prodScalare(vMinus, wPlus, D);
-
-  float posPos = prodScalare(vPlus, wPlus);
-  float negNeg = prodScalare(vMinus, wMinus);
-  float posNeg = prodScalare(vPlus, wMinus);
-  float negPos = prodScalare(vMinus, wPlus);
 
   float approx = posPos + negNeg - posNeg - negPos;
 
@@ -227,13 +229,12 @@ float* indexing(float *p, float *v) {
             output[r * h + c] = distanzaApprossimata(vettore, vPivot, buf_vMinus, buf_vPlus, buf_wMinus, buf_wPlus);
         }
     }
-  }
 
-  free(buf_vMinus);
-  free(buf_vPlus);
-  free(buf_wMinus);
-  free(buf_wPlus);
-  return output;
+    free(buf_vMinus);
+    free(buf_vPlus);
+    free(buf_wMinus);
+    free(buf_wPlus);
+    return output;
 }
 
 */
@@ -249,8 +250,7 @@ float get_d_k_max(float *KNN, int k)
       max_distance = current_distance;
     }
   }
-}
-return max_distance;
+  return max_distance;
 }
 
 void insert_into_knn(float *KNN, int k, int id, float distance)
@@ -796,22 +796,22 @@ void testQueryingCompleto()
 // ---------------------------------------------------------------
 //  MAIN
 // ---------------------------------------------------------------
-int main(int argc, char *argv[])
+int main(int argc, char **argv)
 {
   srand((unsigned)time(NULL));
-  if (argc == 1)
+  if (argc != 6)
   {
-    printf("Inserire 4 valori validi per numero righe, numero colonne, numero "
-           "di pivot,parametro di quantizzazione, nuemro di vicini");
+    printf("Inserisci numero di valori appropritato");
   }
-  if (argc == 6)
-  {
-    N = atoi(argv[1]);
-    D = atoi(argv[2]);
-    h = atoi(argv[3]);
-    x = atoi(argv[4]);
-    k = atoi(argv[5]);
-  }
+  N = atoi(argv[1]);
+  D = atoi(argv[2]);
+  h = atoi(argv[3]);
+  x = atoi(argv[4]);
+  k = atoi(argv[5]);
+
+  // nomeFittizio();
+  // testDistanzaApprossimata();
+  // testIndexing();
   testQueryingCompleto();
   return 0;
 }
