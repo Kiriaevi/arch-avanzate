@@ -7,15 +7,15 @@ NASM_FILES=( *.nasm )
 if [ ${#NASM_FILES[@]} -gt 0 ]; then
   echo "Compilazione file .nasm..."
   for f in "${NASM_FILES[@]}"; do
-    echo " nasm -f elf32 -DPIC $f"
-    nasm -f elf32 -DPIC "$f"
+    echo " nasm -f elf64 -DPIC $f"
+    nasm -f elf64 -DPIC "$f"
   done
 else
   echo "Nessun .nasm trovato, salto fase nasm."
 fi
 
-echo "Compilo mai.c..."
-gcc -msse -m32 -O0 -fPIC -z noexecstack *.o main.c -o quantpivot -lm
+echo "Compilo main.c..."
+gcc -msse -O0 -fPIC -z noexecstack *.o main.c -o quantpivot -lm
 
 # --- CONFIGURAZIONI (modificare a piacere) ---
 Ns=(2063 10001 20003)     # valori di esempio per N (righe)
