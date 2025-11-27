@@ -796,15 +796,23 @@ void testQueryingCompleto()
 int main(int argc, char **argv)
 {
   srand((unsigned)time(NULL));
-  if (argc != 6)
+  if (argc < 6) {
+    N = 2000;
+    D = 256;
+    h = 16;
+    x = 8;
+    k = 8;
+  } else {
+    N = atoi(argv[1]);
+    D = atoi(argv[2]);
+    h = atoi(argv[3]);
+    x = atoi(argv[4]);
+    k = atoi(argv[5]);
+  }
+  if (argc > 6)
   {
     printf("Inserisci numero di valori appropritato");
   }
-  N = atoi(argv[1]);
-  D = atoi(argv[2]);
-  h = atoi(argv[3]);
-  x = atoi(argv[4]);
-  k = atoi(argv[5]);
 
   // nomeFittizio();
   // testDistanzaApprossimata();
