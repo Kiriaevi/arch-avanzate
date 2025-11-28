@@ -126,7 +126,7 @@ void quantizing(float *v, float *vMinus, float *vPlus, params* input)
 {
   int D = input->D;
   int x = input->x;
-  int array_indici[D];
+  int *array_indici = malloc(D*sizeof(int));
 
   // Reset dei vettori output e inizializzazione indici
   for (int k = 0; k < D; k++)
@@ -177,6 +177,7 @@ void quantizing(float *v, float *vMinus, float *vPlus, params* input)
     else
       vPlus[idx] = 1;
   }
+  free(array_indici);
 }
 
 
