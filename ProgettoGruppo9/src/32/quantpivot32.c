@@ -122,11 +122,10 @@ float *indexing(params* input)
 }
 
 
-void quantizing(float *v, float *vMinus, float *vPlus, params* input)
+void quantizing(float *v, float *vMinus, float *vPlus, params* input, int *array_indici)
 {
   int D = input->D;
   int x = input->x;
-  int *array_indici = malloc(D*sizeof(int));
 
   // Reset dei vettori output e inizializzazione indici
   for (int k = 0; k < D; k++)
@@ -177,7 +176,6 @@ void quantizing(float *v, float *vMinus, float *vPlus, params* input)
     else
       vPlus[idx] = 1;
   }
-  free(array_indici);
 }
 
 
@@ -210,13 +208,16 @@ int *calcoloPivot(float *dataSet, int h, int N, int D)
     return;
   }
 
+  int *array_indici = malloc(D*sizeof(int));
+
   for (int i = 0; i < N; i++)
   {
     float *v = &input->DS[i * D];
     float *vp = &vPlus_all[i * D];
     float *vm = &vMinus_all[i * D];
-    quantizing(v, vm, vp, input);
+    quantizing(v, vm, vp, input, array_indici);
   }
+  free(array_indici);
 }
 
 void preQuantizePivots(params *input)
@@ -235,6 +236,7 @@ void preQuantizePivots(params *input)
     return;
   }
 
+  int *array_indici = malloc(D*sizeof(int));
   for (int i = 0; i < h; i++)
   {
     int pivot_idx = input->P[i];
@@ -249,22 +251,20 @@ void preQuantizePivots(params *input)
     float *p = &input->DS[pivot_idx * D];
     float *pp = &pPlus[i * D];
     float *pm = &pMinus[i * D];
-    quantizing(p, pm, pp, input);
+    quantizing(p, pm, pp, input, array_indici);
   }
+  free(array_indici);
 }
 
-float *querying2(float *query, params *input)
+float *querying2(float *query, params *input, float *qPlus, float *qMinus, float *dQP, int *array_indici)
 {
   int D = input->D;
   int h = input->h;
   int k = input->k;
   int N = input->N;
   // quantizza la query
-  float *qPlus = malloc(D * sizeof(float));
-  float *qMinus = malloc(D * sizeof(float));
-  quantizing(query, qMinus, qPlus, input);
+  quantizing(query, qMinus, qPlus, input, array_indici);
   // calcola d(q,p) per ogni pivot
-  float *dQP = malloc(h * sizeof(float));
   for (int j = 0; j < h; j++)
   {
     float *pPlusC = &pPlus[j * D];
@@ -308,9 +308,6 @@ float *querying2(float *query, params *input)
       insert_into_knn(KNN, k, i, d_q_v_real);
     }
   }
-  free(qPlus);
-  free(qMinus);
-  free(dQP);
   return KNN;
 }
 
@@ -381,11 +378,17 @@ void predict(params* input){
   int nq = input->nq;
   int D = input->D;
   int k = input->k;
+  int h = input->h;
+
+  float *qPlus = malloc(D * sizeof(float));
+  float *qMinus = malloc(D * sizeof(float));
+  int *array_indici = malloc(D*sizeof(int));
+  float *dQP = malloc(h * sizeof(float));
 
   for(int i = 0; i < nq; i++) {
     float *query = &input->Q[i*D];
     
-    float *KNN = querying2(query, input);
+    float *KNN = querying2(query, input, qPlus, qMinus, dQP, array_indici);
 
     for (int j = 0; j < k; j++) {
       input->id_nn[i*k + j] = (int) KNN[2*j];     
@@ -394,6 +397,10 @@ void predict(params* input){
 
     free(KNN); 
   }
+  free(qPlus);
+  free(qMinus);
+  free(array_indici);
+  free(dQP);
 
   freePreQuantization();
 }

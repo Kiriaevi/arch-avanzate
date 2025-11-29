@@ -305,8 +305,8 @@ int main(int argc, char **argv)
 
 
   // ================= Parametri di ingresso =================
-  char* dsfilename = "ds.ds2";
-  char* queryfilename = "query.ds2";
+  char* dsfilename = "generated_dataset.ds2";
+  char* queryfilename = "generated_queries.ds2";
   h = 2;
   k = 3;
   x = 2;
