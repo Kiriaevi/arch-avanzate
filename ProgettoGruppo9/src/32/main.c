@@ -101,215 +101,14 @@ void save_data(char* filename, void* X, int n, int k)
 }
 
 
-
-//void testQueryingCompleto()
-//{
-//  printf("\n===== TEST querying COMPLETO =====\n");
-//
-//  // 1. Genera dataset casuale
-//  float *dataset = malloc(N * D *  sizeof(float));
-//  if (!dataset)
-//  {
-//    fprintf(stderr, "Errore allocazione dataset!\n");
-//    return;
-//  }
-//
-//  for (int i = 0; i < N; i++)
-//    for (int j = 0; j < D; j++)
-//      dataset[i * D + j] = ((float)rand() / RAND_MAX) * 20 - 10;
-//
-//  // 2. Calcola pivot e pre-quantizzazione
-//  float *pivot = calcoloPivot(dataset, h, N, D);
-//  if (!pivot)
-//  {
-//    fprintf(stderr, "Errore calcolo pivot!\n");
-//    free(dataset);
-//    return;
-//  }
-//
-//  preQuantizeDataset(dataset);
-//  preQuantizePivots(pivot);
-//
-//  // 3. Costruisci indice
-//  float *vettoreIndexing = indexing(pivot, dataset);
-//  if (!vettoreIndexing)
-//  {
-//    fprintf(stderr, "Errore indexing!\n");
-//    free(dataset);
-//    free(pivot);
-//    freePreQuantization();
-//    return;
-//  }
-//
-//  // 4. Genera query casuale
-//  float *query = malloc(D * sizeof(float));
-//  if (!query)
-//  {
-//    fprintf(stderr, "Errore allocazione query!\n");
-//    free(dataset);
-//    free(pivot);
-//    free(vettoreIndexing);
-//    freePreQuantization();
-//    return;
-//  }
-//
-//  for (int i = 0; i < D; i++)
-//    query[i] = ((float)rand() / RAND_MAX) * 20 - 10;
-//
-//  // 5. Esegui KNN approssimato
-//  float *KNN = querying2(query, pivot, dataset, vettoreIndexing);
-//  if (!KNN)
-//  {
-//    fprintf(stderr, "Errore querying!\n");
-//    free(dataset);
-//    free(pivot);
-//    free(vettoreIndexing);
-//    free(query);
-//    freePreQuantization();
-//    return;
-//  }
-//
-//  printf("\nK-NN trovati da querying (id, distanza reale):\n");
-//  for (int i = 0; i < k; i++)
-//  {
-//    int id = (int)KNN[i * 2];
-//    float dist = KNN[i * 2 + 1];
-//    if (id != -1)
-//      printf("%d: %.4f\n", id, dist);
-//  }
-//
-//  // 6. Calcola distanze euclidee reali - USA UN ARRAY SEPARATO
-//  float *realDistances = malloc(N * sizeof(float));
-//  if (!realDistances)
-//  {
-//    fprintf(stderr, "Errore allocazione realDistances!\n");
-//    free(dataset);
-//    free(pivot);
-//    free(vettoreIndexing);
-//    free(KNN);
-//    free(query);
-//    freePreQuantization();
-//    return;
-//  }
-//
-//  // FIXME: la distanza va calcolata tra le query e i pivot, non query e TUTTO il dataset
-//  // CALCOLA TUTTE LE DISTANZE
-//  for (int i = 0; i < N; i++)
-//  {
-//    float *v = &dataset[i * D];
-//    realDistances[i] = dEuclidea(query, v);
-//  }
-//
-//  // 7. Crea una COPIA per l'ordinamento
-//  float *sortedDistances = malloc(N * sizeof(float));
-//  if (!sortedDistances)
-//  {
-//    fprintf(stderr, "Errore allocazione sortedDistances!\n");
-//    free(realDistances);
-//    free(dataset);
-//    free(pivot);
-//    free(vettoreIndexing);
-//    free(KNN);
-//    free(query);
-//    freePreQuantization();
-//    return;
-//  }
-//  memcpy(sortedDistances, realDistances, N * sizeof(float));
-//
-//  printf("\nK-NN reali (distanza euclidea):\n");
-//  for (int n = 0; n < k; n++)
-//  {
-//    int min_idx = -1;
-//    float min_val = FLT_MAX;
-//    for (int i = 0; i < N; i++)
-//    {
-//      if (sortedDistances[i] < min_val)
-//      {
-//        min_val = sortedDistances[i];
-//        min_idx = i;
-//      }
-//    }
-//    if (min_idx != -1)
-//    {
-//      printf("%d: %.4f\n", min_idx, min_val);
-//      sortedDistances[min_idx] = FLT_MAX;
-//    }
-//  }
-//
-//  // 8. Verifica errori - USA realDistances ORIGINALE
-//  float max_dist_knn = 0.0f;
-//  for (int i = 0; i < k; i++)
-//    if (KNN[i * 2 + 1] > max_dist_knn)
-//      max_dist_knn = KNN[i * 2 + 1];
-//
-//  int errori = 0;
-//  for (int i = 0; i < N; i++)
-//  {
-//    int in_knn = 0;
-//    for (int j = 0; j < k; j++)
-//      if ((int)KNN[j * 2] == i)
-//      {
-//        in_knn = 1;
-//        break;
-//      }
-//
-//    if (!in_knn)
-//    {
-//      // USA realDistances che non è stato modificato!
-//      float dist = realDistances[i];
-//      if (dist < max_dist_knn)
-//      {
-//        printf("ERRORE: punto %d escluso ma distanza %.4f < %.4f\n",
-//               i, dist, max_dist_knn);
-//        errori++;
-//      }
-//    }
-//  }
-//
-//  if (errori == 0)
-//    printf("✓ Nessun errore! Tutti i punti esclusi sono effettivamente più lontani.\n");
-//  else
-//    printf("✗ Trovati %d errori!\n", errori);
-//
-//  // 9. Libera memoria
-//  free(sortedDistances);
-//  free(realDistances);
-//  free(dataset);
-//  free(pivot);
-//  free(vettoreIndexing);
-//  free(KNN);
-//  free(query);
-//  freePreQuantization();
-//}
-
 int main(int argc, char **argv)
 {
-  //srand((unsigned)time(NULL));
-  //if (argc < 6) {
-  //  N = 2000;
-  //  D = 256;
-  //  h = 16;
-  //  x = 8;
-  //  k = 8;
-  //} else {
-  //  N = atoi(argv[1]);
-  //  D = atoi(argv[2]);
-  //  h = atoi(argv[3]);
-  //  x = atoi(argv[4]);
-  //  k = atoi(argv[5]);
-  //}
-  //if (argc > 6)
-  //{
-  //  printf("Inserisci numero di valori appropritato");
-  //}
-
-
   // ================= Parametri di ingresso =================
   char* dsfilename = "generated_dataset.ds2";
   char* queryfilename = "generated_queries.ds2";
-  h = 2;
-  k = 3;
-  x = 2;
+  h = 21;
+  k = 7;
+  x = 23;
   silent = 1;
   // =========================================================
 
@@ -332,89 +131,109 @@ int main(int argc, char **argv)
   N = input->N;
   D = input->D;
   printf("N = %d, D = %d, h = %d, x = %d, k = %d\n", N,D,h,x,k);
+	clock_t t;
+	double time;
 
-clock_t t;
-double elapsed;
+	t = omp_get_wtime();
+	// =========================================================
+	fit(input);
+	// =========================================================
+	t = omp_get_wtime() - t;
+	time = ((float)t)/CLOCKS_PER_SEC;
 
-t = clock();
-fit(input);
-t = clock() - t;
-elapsed = ((double)t) / CLOCKS_PER_SEC;
-printf("FIT time = %.5f secs\n", elapsed);
+	if(!input->silent)
+		printf("FIT time = %.5lf secs\n", time);
+	else
+		printf("%.3lf\n", time);
 
+	t = omp_get_wtime();
+	// =========================================================
+	predict(input);
+	// =========================================================
+	t = omp_get_wtime() - t;
+	time = ((float)t)/CLOCKS_PER_SEC;
 
-  if(!input->silent)
-    printf("FIT time = %.5f secs\n", time);
-  else
-    printf("%.3f\n", time);
-
-elapsed = 0;
-
-t = clock();
-predict(input);
-t = clock() - t;
-elapsed = ((double)t) / CLOCKS_PER_SEC;
-printf("FIT time = %.5f secs\n", elapsed);
-
-
-  if(!input->silent)
-    printf("PREDICT time = %.5f secs\n", time);
-  else
-    printf("%.3f\n", time);
+	if(!input->silent)
+		printf("PREDICT time = %.5f secs\n", time);
+	else
+		printf("%.3f\n", time);
 
 
 
 
+printf("\n=== VALUTAZIONE K-NN APPROSSIMATI ===\n");
 
-    printf("\n=== CONFRONTO PRIME 20 DISTANZE ===\n");
-
-int M = 20;                // quante distanze stampare
-if (M > input->N) M = input->N;
-
-float *approx = malloc(M * sizeof(float));
-float *real = malloc(input->N * sizeof(float));
-
-// Prendi la prima query (Q0)
+// Prendi la prima query
 float *queryVec = &input->Q[0 * D];
 
-// --- 1) PRENDO PRIME 20 DISTANZE APPROSSIMATE ---
-// (quelle trovate dal tuo algoritmo)
-for(int j = 0; j < M; j++) {
-    approx[j] = input->dist_nn[j];   // j-esima distanza trovata
-}
+// --- STEP 1: Calcola TUTTI i k-NN REALI (brute force) ---
+float *allDistances = malloc(input->N * sizeof(float));
+int *allIndices = malloc(input->N * sizeof(int));
 
-
-// --- 2) CALCOLO TUTTE LE DISTANZE REALI PER ORDINARLE ---
 for(int i = 0; i < input->N; i++) {
     float *vec = &input->DS[i * D];
-    real[i] = dEuclidea(queryVec, vec, D);
+    allDistances[i] = dEuclidea(queryVec, vec, D);
+    allIndices[i] = i;
 }
 
-// --- 3) ORDINO LE DISTANZE REALI E PRENDO LE PRIME 20 ---
-for(int a=0; a<M; a++){
-    // cerca min in real[a..N]
-    int min_idx = a;
-    for(int b=a+1; b<input->N; b++){
-        if(real[b] < real[min_idx]) min_idx = b;
+// Ordina per trovare i veri k-NN (selection sort sui primi k)
+for(int i = 0; i < k; i++) {
+    int min_idx = i;
+    for(int j = i+1; j < input->N; j++) {
+        if(allDistances[j] < allDistances[min_idx]) {
+            min_idx = j;
+        }
     }
-    // swap
-    float tmp = real[a];
-    real[a] = real[min_idx];
-    real[min_idx] = tmp;
+    // Swap distanze
+    float tmpD = allDistances[i];
+    allDistances[i] = allDistances[min_idx];
+    allDistances[min_idx] = tmpD;
+    // Swap indici
+    int tmpI = allIndices[i];
+    allIndices[i] = allIndices[min_idx];
+    allIndices[min_idx] = tmpI;
 }
 
-// --- 4) STAMPA ---
-printf("\nIdx |   Approssimata   |     Reale\n");
-printf("---------------------------------------\n");
-
-for(int i=0; i<M; i++){
-    printf("%3d | %14.6f | %14.6f\n", i, approx[i], real[i]);
+// --- STEP 2: Confronta con i k-NN trovati dal tuo algoritmo ---
+printf("\nK-NN REALI (brute force):\n");
+for(int i = 0; i < k; i++) {
+    printf("  %d) ID=%4d  dist=%.6f\n", i, allIndices[i], allDistances[i]);
 }
 
+printf("\nK-NN APPROSSIMATI (tuo algoritmo):\n");
+for(int i = 0; i < k; i++) {
+    int id = input->id_nn[0*k + i];
+    float dist = input->dist_nn[0*k + i];
+    printf("  %d) ID=%4d  dist=%.6f\n", i, id, dist);
+}
 
-free(approx);
-free(real);
+// --- STEP 3: Calcola metriche ---
+int corretti = 0;
+for(int i = 0; i < k; i++) {
+    int id_trovato = input->id_nn[0*k + i];
+    // Verifica se è nei veri k-NN
+    for(int j = 0; j < k; j++) {
+        if(allIndices[j] == id_trovato) {
+            corretti++;
+            break;
+        }
+    }
+}
 
+float recall = (float)corretti / k;
+printf("\n--- METRICHE ---\n");
+printf("Recall@%d: %.2f%% (%d/%d corretti)\n", k, recall*100, corretti, k);
+
+// Confronta le distanze massime
+float max_dist_reale = allDistances[k-1];
+float max_dist_approx = input->dist_nn[0*k + k-1];
+printf("Distanza massima (reale):  %.6f\n", max_dist_reale);
+printf("Distanza massima (approx): %.6f\n", max_dist_approx);
+printf("Errore relativo: %.2f%%\n", 
+       100.0 * fabs(max_dist_approx - max_dist_reale) / max_dist_reale);
+
+free(allDistances);
+free(allIndices);
 
   // Salva il risultato
   char* outname_id = "out_idnn.ds2";
@@ -438,48 +257,68 @@ free(real);
   }
 
 
-  // CALCOLO DISTANZA REALE
-// CALCOLO DISTANZA REALE
-float *realDistances = malloc(input->nq*k*sizeof(float));
-for (int i = 0; i < input->nq; i++)
-{
-    float *queryVec = &input->Q[i * D];  // ✅ Prendi la query i-esima
-    for(int j = 0; j < k; j++) {
-        int idx = input->id_nn[i*k+j];
-        float *neighborVec = &input->DS[idx * D];  // ✅ Moltiplica per D
-        realDistances[i*k+j] = dEuclidea(queryVec, neighborVec, D);
+
+
+
+  printf("\n=== TEST SU TUTTE LE QUERY ===\n");
+int totale_corretti = 0;
+float errore_totale = 0.0;
+
+for(int q = 0; q < input->nq; q++) {
+    float *queryVec = &input->Q[q * D];
+    
+    // Calcola k-NN reali
+    float *allDistances = malloc(input->N * sizeof(float));
+    int *allIndices = malloc(input->N * sizeof(int));
+    
+    for(int i = 0; i < input->N; i++) {
+        float *vec = &input->DS[i * D];
+        allDistances[i] = dEuclidea(queryVec, vec, D);
+        allIndices[i] = i;
     }
+    
+    // Ordina
+    for(int i = 0; i < k; i++) {
+        int min_idx = i;
+        for(int j = i+1; j < input->N; j++) {
+            if(allDistances[j] < allDistances[min_idx]) {
+                min_idx = j;
+            }
+        }
+        float tmpD = allDistances[i];
+        allDistances[i] = allDistances[min_idx];
+        allDistances[min_idx] = tmpD;
+        int tmpI = allIndices[i];
+        allIndices[i] = allIndices[min_idx];
+        allIndices[min_idx] = tmpI;
+    }
+    
+    // Conta corretti
+    int corretti = 0;
+    for(int i = 0; i < k; i++) {
+        int id_trovato = input->id_nn[q*k + i];
+        for(int j = 0; j < k; j++) {
+            if(allIndices[j] == id_trovato) {
+                corretti++;
+                break;
+            }
+        }
+    }
+    totale_corretti += corretti;
+    
+    float max_dist_reale = allDistances[k-1];
+    float max_dist_approx = input->dist_nn[q*k + k-1];
+    errore_totale += fabs(max_dist_approx - max_dist_reale) / max_dist_reale;
+    
+    free(allDistances);
+    free(allIndices);
 }
-  printf("\n--- CONFRONTO DISTANZE (nq: %d, k: %d) ---\n", input->nq, k);
 
-  // FIX: Allocazione temporanea per il confronto (opzionale, calcoliamo al volo)
-  for (int i = 0; i < input->nq; i++) {
-    //printf("Query #%d:\n", i);
+float recall_medio = (float)totale_corretti / (input->nq * k);
+float errore_medio = errore_totale / input->nq;
 
-    // FIX 1: Il vettore di partenza è la QUERY, non il dataset!
-    float *queryVec = &input->Q[i * D]; 
-
-    for (int j = 0; j < k; j++) {
-      int idx_neighbor = input->id_nn[i*k+j]; // ID del vicino trovato
-
-      // FIX 2: Calcolo indirizzo vettore vicino. 
-      // DEVI moltiplicare idx_neighbor * D per saltare i vettori precedenti!
-      float *neighborVec = &input->DS[idx_neighbor * D]; 
-
-      // Calcolo distanza reale (senza ottimizzazioni, per verifica)
-      float real = dEuclidea(queryVec, neighborVec, D);
-
-      float stored = input->dist_nn[i*k+j];
-
-      /*printf("  NN %d (ID %d): Real: %10.5f | Stored: %10.5f | Diff: %e\n", 
-          j, idx_neighbor, real, stored, real - stored);*/
-    }
-    //printf("\n"); 
-  }
-
-  // Pulizia finale (tutto corretto ora che calcoloPivot usa _mm_malloc)
- free(realDistances);
-
+printf("Recall medio: %.2f%%\n", recall_medio * 100);
+printf("Errore relativo medio: %.2f%%\n", errore_medio * 100);
 // Libera strutture allocate con _mm_malloc
 _mm_free(input->DS);
 _mm_free(input->Q);
@@ -491,10 +330,5 @@ _mm_free(input->dist_nn);
 // Libera la struttura params
 free(input);
 
-
-  // nomeFittizio();
-  // testDistanzaApprossimata();
-  // testIndexing();
-  //testQueryingCompleto();
   return 0;
 }
