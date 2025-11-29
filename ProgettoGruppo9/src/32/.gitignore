@@ -5,3 +5,5 @@ quantpivot
 programma
 *.out.*
 valgrind.txt
+*.ds2
+generate_data
