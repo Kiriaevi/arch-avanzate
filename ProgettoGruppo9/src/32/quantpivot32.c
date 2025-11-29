@@ -14,6 +14,7 @@ float *pPlus = NULL;
 float *pMinus = NULL;
 
 extern float prodScalare(float *v, float *w, int D);
+extern float dEuclidea(float *v, float *w, int D);
 
 void freePreQuantization()
 {
@@ -63,6 +64,7 @@ void insert_into_knn(float *KNN, int k, int id, float distance)
   }
 }
 
+/*
 float dEuclidea(float *v, float *w, int D)
 {
   float distanza = 0.0f;
@@ -73,6 +75,7 @@ float dEuclidea(float *v, float *w, int D)
   }
   return sqrtf(distanza);
 }
+  */
 
 
 float get_d_k_max(float *KNN, int k)
