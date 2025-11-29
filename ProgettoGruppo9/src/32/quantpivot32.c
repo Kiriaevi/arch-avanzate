@@ -122,12 +122,14 @@ float *indexing(params* input)
 }
 
 
+
 void quantizing(float *v, float *vMinus, float *vPlus, params* input, int *array_indici)
 {
   int D = input->D;
   int x = input->x;
 
-  // Reset dei vettori output e inizializzazione indici
+  // 1. Reset e Inizializzazione
+  // Nota: array_indici serve solo come mappa per non scambiare i float originali
   for (int k = 0; k < D; k++)
   {
     array_indici[k] = k;
@@ -135,11 +137,13 @@ void quantizing(float *v, float *vMinus, float *vPlus, params* input, int *array
     vMinus[k] = 0;
   }
 
-  // cerco X massimi
+  // 2. Cerco gli X elementi con valore assoluto massimo (Partial Selection Sort)
+  // Complessità: O(x * D) - Ottimo se x << D
   for (int i = 0; i < x; i++)
   {
     int maxIndex = i;
-    float maxVal = fabsf(v[array_indici[i]]);
+    // Uso fabsf sui valori originali indicizzati da array_indici
+    float maxVal = fabsf(v[array_indici[i]]); 
 
     for (int j = i + 1; j < D; j++)
     {
@@ -152,29 +156,28 @@ void quantizing(float *v, float *vMinus, float *vPlus, params* input, int *array
       }
     }
 
+    // Scambio solo gli indici, non tocco il vettore v originale
     int temp = array_indici[i];
     array_indici[i] = array_indici[maxIndex];
     array_indici[maxIndex] = temp;
   }
 
-  // Gestione segno per i top X
+  // 3. Assegnazione ai vettori vPlus e vMinus
+  // Fuso insieme alla gestione segno, eliminando il bug dello zero
   for (int i = 0; i < x; i++)
   {
-    int idx = array_indici[i];
-    if (v[idx] < 0)
+    int original_idx = array_indici[i]; // Recupero l'indice originale del top element
+    
+    // Specifica progetto[cite: 44, 45, 51]: 
+    // Se v >= 0 -> vPlus=1, altrimenti vMinus=1
+    if (v[original_idx] >= 0) 
     {
-      array_indici[i] = -idx;
+      vPlus[original_idx] = 1.0f;
     }
-  }
-
-  // Assegno ai vettori plus/minus
-  for (int i = 0; i < x; i++)
-  {
-    int idx = array_indici[i];
-    if (idx < 0)
-      vMinus[-idx] = 1;
-    else
-      vPlus[idx] = 1;
+    else 
+    {
+      vMinus[original_idx] = 1.0f;
+    }
   }
 }
 
@@ -193,7 +196,9 @@ int *calcoloPivot(float *dataSet, int h, int N, int D)
     
   printf("FINE CALCOLO PIVOT\n");
   return pivot;
-}void preQuantizeDataset(params *input)
+}
+
+void preQuantizeDataset(params *input)
 {
   int N = input->N;
   int D = input->D;
@@ -262,52 +267,78 @@ float *querying2(float *query, params *input, float *qPlus, float *qMinus, float
   int h = input->h;
   int k = input->k;
   int N = input->N;
-  // quantizza la query
+
+  // 1. Quantizza la query
   quantizing(query, qMinus, qPlus, input, array_indici);
-  // calcola d(q,p) per ogni pivot
+
+  // 2. Calcola d(q,p) per ogni pivot 
   for (int j = 0; j < h; j++)
   {
-    float *pPlusC = &pPlus[j * D];
+    // Nota: pPlus/pMinus devono essere accessibili (es. da input->pPlus)
+    float *pPlusC = &pPlus[j * D]; 
     float *pMinusC = &pMinus[j * D];
     dQP[j] = distanzaApprossimataPreQ(qPlus, qMinus, pPlusC, pMinusC, D);
   }
-  // Preparo il KNN
+
+  // 3. Inizializza K-NN 
+  // Struttura: [id_0, dist_0, id_1, dist_1, ...]
   int dim = 2 * k;
   float *KNN = malloc(dim * sizeof(float));
   for (int i = 0; i < k; i++)
   {
-    KNN[2 * i] = -1;
-    KNN[2 * i + 1] = FLT_MAX;
+    KNN[2 * i] = -1.0f;     // ID
+    KNN[2 * i + 1] = FLT_MAX; // Distanza
   }
-  // Itero sul dataset
+
+  // 4. Itera sul dataset 
   for (int i = 0; i < N; i++)
   {
+    // A. Calcolo Lower Bound coi Pivot 
     float best_lb = 0.0f;
     for (int j = 0; j < h; j++)
     {
-      float d_vi_pj = input->index[i * h + j];
+      float d_vi_pj = input->index[i * h + j]; // Accesso all'indice precalcolato
       float lb = fabsf(d_vi_pj - dQP[j]);
       if (lb > best_lb)
         best_lb = lb;
     }
+
+    // Recupera la distanza massima attuale nel K-NN
     float d_k_max = get_d_k_max(KNN, k);
+
+    // B. Filtro Pivot 
     if (best_lb >= d_k_max)
       continue;
+
+    // C. Calcolo Distanza Approssimata 
+    // Nota: vPlus_all/vMinus_all dovrebbero essere in input->...
     float *vPlus = &vPlus_all[i * D];
     float *vMinus = &vMinus_all[i * D];
     float d_q_v_approx = distanzaApprossimataPreQ(qPlus, qMinus, vPlus, vMinus, D);
-    if (d_q_v_approx >= d_k_max)
-      continue; // non considero il vettore
 
-    // Calcolo distanza reale
-    float *v = &input->DS[i * D];
-    float d_q_v_real = dEuclidea(query, v, D);
-
-    if (d_q_v_real < d_k_max)
+    // D. Inserimento basato su Distanza Approssimata 
+    // CORREZIONE: Qui usiamo d_q_v_approx, NON la Euclidea!
+    if (d_q_v_approx < d_k_max)
     {
-      insert_into_knn(KNN, k, i, d_q_v_real);
+      // Inserisce (i, d_q_v_approx) mantenendo la lista ordinata
+      insert_into_knn(KNN, k, i, d_q_v_approx);
     }
   }
+
+  // 5. Raffinamento Finale (Ricalcolo Euclideo) 
+  // Solo ora calcoliamo la distanza reale per i vincitori
+  for (int i = 0; i < k; i++)
+  {
+     int id_vicino = (int)KNN[2 * i];
+     
+     // Se la posizione è valida (non è -1)
+     if (id_vicino >= 0) {
+         float *v = &input->DS[id_vicino * D];
+         // Sostituiamo la distanza approssimata con quella reale
+         KNN[2 * i + 1] = dEuclidea(query, v, D); 
+     }
+  }
+
   return KNN;
 }
 

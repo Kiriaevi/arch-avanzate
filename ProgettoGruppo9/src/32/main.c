@@ -34,70 +34,70 @@ float *querying(float *query, float *pivot, float *dataSet, float *vettoreIndexi
 
 
 /*
-*
-* 	load_data
-* 	=========
-*
-*	Legge da file una matrice di N righe
-* 	e M colonne e la memorizza in un array lineare in row-major order
-*
-* 	Codifica del file:
-* 	primi 4 byte: numero di righe (N) --> numero intero
-* 	successivi 4 byte: numero di colonne (M) --> numero intero
-* 	successivi N*M*4 byte: matrix data in row-major order --> numeri floating-point a precisione singola
-*/
+ *
+ * 	load_data
+ * 	=========
+ *
+ *	Legge da file una matrice di N righe
+ * 	e M colonne e la memorizza in un array lineare in row-major order
+ *
+ * 	Codifica del file:
+ * 	primi 4 byte: numero di righe (N) --> numero intero
+ * 	successivi 4 byte: numero di colonne (M) --> numero intero
+ * 	successivi N*M*4 byte: matrix data in row-major order --> numeri floating-point a precisione singola
+ */
 MATRIX load_data(char* filename, int *n, int *k) {
-	FILE* fp;
-	int rows, cols, status, i;
+  FILE* fp;
+  int rows, cols, status, i;
 
-	fp = fopen(filename, "rb");
-	
-	if (fp == NULL){
-		printf("'%s': bad data file name!\n", filename);
-		exit(0);
-	}
-	
-    //TODO: gestiamo il controllo errori? 
-	status = fread(&rows, sizeof(int), 1, fp);
-	status = fread(&cols, sizeof(int), 1, fp);
-	
-	MATRIX data = _mm_malloc(rows*cols*sizeof(type), align);
-	status = fread(data, sizeof(type), rows*cols, fp);
-	fclose(fp);
-	
-	*n = rows;
-	*k = cols;
-	
-	return data;
+  fp = fopen(filename, "rb");
+
+  if (fp == NULL){
+    printf("'%s': bad data file name!\n", filename);
+    exit(0);
+  }
+
+  //TODO: gestiamo il controllo errori? 
+  status = fread(&rows, sizeof(int), 1, fp);
+  status = fread(&cols, sizeof(int), 1, fp);
+
+  MATRIX data = _mm_malloc(rows*cols*sizeof(type), align);
+  status = fread(data, sizeof(type), rows*cols, fp);
+  fclose(fp);
+
+  *n = rows;
+  *k = cols;
+
+  return data;
 }
 
 /*
-* 	save_data
-* 	=========
-* 
-*	Salva su file un array lineare in row-major order
-*	come matrice di N righe e M colonne
-* 
-* 	Codifica del file:
-* 	primi 4 byte: numero di righe (N) --> numero intero a 32 bit
-* 	successivi 4 byte: numero di colonne (M) --> numero intero a 32 bit
-* 	successivi N*M*4 byte: matrix data in row-major order --> numeri interi o floating-point a precisione singola
-*/
+ * 	save_data
+ * 	=========
+ * 
+ *	Salva su file un array lineare in row-major order
+ *	come matrice di N righe e M colonne
+ * 
+ * 	Codifica del file:
+ * 	primi 4 byte: numero di righe (N) --> numero intero a 32 bit
+ * 	successivi 4 byte: numero di colonne (M) --> numero intero a 32 bit
+ * 	successivi N*M*4 byte: matrix data in row-major order --> numeri interi o floating-point a precisione singola
+ */
 void save_data(char* filename, void* X, int n, int k)
 {
-    FILE* fp = fopen(filename, "wb");
-    fwrite(&n, sizeof(int), 1, fp);
-    fwrite(&k, sizeof(int), 1, fp);
+  FILE* fp = fopen(filename, "wb");
+  fwrite(&n, sizeof(int), 1, fp);
+  fwrite(&k, sizeof(int), 1, fp);
 
-    // Usa un puntatore a byte per avanzare correttamente
-    char* ptr = (char*) X;
+  // Usa un puntatore a byte per avanzare correttamente
+  char* ptr = (char*) X;
 
-    for (int i = 0; i < n; i++) {
-        fwrite(ptr, sizeof(type), k, fp);
-        ptr += sizeof(type) * k;
-    }
+  for (int i = 0; i < n; i++) {
+    fwrite(ptr, sizeof(type), k, fp);
+    ptr += sizeof(type) * k;
+  }
 
-    fclose(fp);
+  fclose(fp);
 }
 
 
@@ -305,12 +305,12 @@ int main(int argc, char **argv)
 
 
   // ================= Parametri di ingresso =================
-  char* dsfilename = "generated_dataset.ds2";
-  char* queryfilename = "generated_queries.ds2";
-  h = 2;
-  k = 3;
-  x = 2;
-  silent = 1;
+  char* dsfilename = "dataset_2000x256_32.ds2";
+  char* queryfilename = "query_2000x256_32.ds2";
+  h = 16;
+  k = 8;
+  x = 64;
+  silent = 0;
   // =========================================================
 
   params* input = malloc(sizeof(params));
@@ -333,87 +333,89 @@ int main(int argc, char **argv)
   D = input->D;
   printf("N = %d, D = %d, h = %d, x = %d, k = %d\n", N,D,h,x,k);
 
-clock_t t;
-double elapsed;
+  clock_t t;
+  double elapsed;
 
-t = clock();
-fit(input);
-t = clock() - t;
-elapsed = ((double)t) / CLOCKS_PER_SEC;
-printf("FIT time = %.5f secs\n", elapsed);
-
-
-  if(!input->silent)
-    printf("FIT time = %.5f secs\n", time);
-  else
-    printf("%.3f\n", time);
-
-elapsed = 0;
-
-t = clock();
-predict(input);
-t = clock() - t;
-elapsed = ((double)t) / CLOCKS_PER_SEC;
-printf("FIT time = %.5f secs\n", elapsed);
+  t = clock();
+  fit(input);
+  t = clock() - t;
+  elapsed = ((double)t) / CLOCKS_PER_SEC;
+  printf("FIT time = %.5f secs\n", elapsed);
 
 
   if(!input->silent)
-    printf("PREDICT time = %.5f secs\n", time);
+    printf("FIT time = %.5lf secs\n", elapsed);
   else
-    printf("%.3f\n", time);
+    printf("%.3lf\n", elapsed);
+
+  elapsed = 0;
+
+  t = clock();
+  predict(input);
+  t = clock() - t;
+  elapsed = ((double)t) / CLOCKS_PER_SEC;
+  printf("FIT time = %.5f secs\n", elapsed);
+
+
+  if(!input->silent)
+    printf("PREDICT time = %.5lf secs\n", elapsed);
+  else
+    printf("%.3lf\n", elapsed);
 
 
 
 
+  printf("\n=== CONFRONTO PRIME DISTANZE ===\n");
 
-    printf("\n=== CONFRONTO PRIME 20 DISTANZE ===\n");
+    // 1. Definisci quanti elementi stampare
+    int M = 20;                 
+    if (M > input->k) M = input->k; // <--- FIX CRUCIALE: Non stampare più di k!
+    if (M > input->N) M = input->N;
 
-int M = 20;                // quante distanze stampare
-if (M > input->N) M = input->N;
+    float *approx = malloc(M * sizeof(float));
+    float *real = malloc(input->N * sizeof(float));
 
-float *approx = malloc(M * sizeof(float));
-float *real = malloc(input->N * sizeof(float));
+    // Prendi la prima query (Q0)
+    // Nota: input->dist_nn è un array piatto. Per la query i-esima, 
+    // l'offset è (i * k). Qui stiamo guardando la query 0.
+    float *queryVec = &input->Q[0 * D];
 
-// Prendi la prima query (Q0)
-float *queryVec = &input->Q[0 * D];
-
-// --- 1) PRENDO PRIME 20 DISTANZE APPROSSIMATE ---
-// (quelle trovate dal tuo algoritmo)
-for(int j = 0; j < M; j++) {
-    approx[j] = input->dist_nn[j];   // j-esima distanza trovata
-}
-
-
-// --- 2) CALCOLO TUTTE LE DISTANZE REALI PER ORDINARLE ---
-for(int i = 0; i < input->N; i++) {
-    float *vec = &input->DS[i * D];
-    real[i] = dEuclidea(queryVec, vec, D);
-}
-
-// --- 3) ORDINO LE DISTANZE REALI E PRENDO LE PRIME 20 ---
-for(int a=0; a<M; a++){
-    // cerca min in real[a..N]
-    int min_idx = a;
-    for(int b=a+1; b<input->N; b++){
-        if(real[b] < real[min_idx]) min_idx = b;
+    // --- 1) PRENDO LE DISTANZE TROVATE DAL TUO ALGORITMO ---
+    for(int j = 0; j < M; j++) {
+        approx[j] = input->dist_nn[j]; 
     }
-    // swap
-    float tmp = real[a];
-    real[a] = real[min_idx];
-    real[min_idx] = tmp;
-}
 
-// --- 4) STAMPA ---
-printf("\nIdx |   Approssimata   |     Reale\n");
-printf("---------------------------------------\n");
+    // --- 2) CALCOLO TUTTE LE DISTANZE REALI (VERIFICA BRUTE FORCE) ---
+    // (Questo serve solo per vedere se il tuo approx ha senso)
+    for(int i = 0; i < input->N; i++) {
+        float *vec = &input->DS[i * D];
+        real[i] = dEuclidea(queryVec, vec, D);
+    }
 
-for(int i=0; i<M; i++){
-    printf("%3d | %14.6f | %14.6f\n", i, approx[i], real[i]);
-}
+    // --- 3) ORDINO LE DISTANZE REALI (Selection Sort parziale sui primi M) ---
+    for(int a=0; a<M; a++){
+        int min_idx = a;
+        for(int b=a+1; b<input->N; b++){
+            if(real[b] < real[min_idx]) min_idx = b;
+        }
+        float tmp = real[a];
+        real[a] = real[min_idx];
+        real[min_idx] = tmp;
+    }
 
+    // --- 4) STAMPA ---
+    printf("\nIdx |   Approssimata   |      Reale (Best)\n");
+    printf("----------------------------------------\n");
 
-free(approx);
-free(real);
+    for(int i=0; i<M; i++){
+        // Stampa affiancata:
+        // SX: Il vicino che il TUO codice ha scelto
+        // DX: Il miglior vicino possibile matematicamente
+        printf("%3d | %14.6f | %14.6f\n", i, approx[i], real[i]);
+    }
+
+    free(approx);
+    free(real);\
 
 
   // Salva il risultato
@@ -439,17 +441,17 @@ free(real);
 
 
   // CALCOLO DISTANZA REALE
-// CALCOLO DISTANZA REALE
-float *realDistances = malloc(input->nq*k*sizeof(float));
-for (int i = 0; i < input->nq; i++)
-{
+  // CALCOLO DISTANZA REALE
+  float *realDistances = malloc(input->nq*k*sizeof(float));
+  for (int i = 0; i < input->nq; i++)
+  {
     float *queryVec = &input->Q[i * D];  // ✅ Prendi la query i-esima
     for(int j = 0; j < k; j++) {
-        int idx = input->id_nn[i*k+j];
-        float *neighborVec = &input->DS[idx * D];  // ✅ Moltiplica per D
-        realDistances[i*k+j] = dEuclidea(queryVec, neighborVec, D);
+      int idx = input->id_nn[i*k+j];
+      float *neighborVec = &input->DS[idx * D];  // ✅ Moltiplica per D
+      realDistances[i*k+j] = dEuclidea(queryVec, neighborVec, D);
     }
-}
+  }
   printf("\n--- CONFRONTO DISTANZE (nq: %d, k: %d) ---\n", input->nq, k);
 
   // FIX: Allocazione temporanea per il confronto (opzionale, calcoliamo al volo)
@@ -472,24 +474,24 @@ for (int i = 0; i < input->nq; i++)
       float stored = input->dist_nn[i*k+j];
 
       /*printf("  NN %d (ID %d): Real: %10.5f | Stored: %10.5f | Diff: %e\n", 
-          j, idx_neighbor, real, stored, real - stored);*/
+        j, idx_neighbor, real, stored, real - stored);*/
     }
     //printf("\n"); 
   }
 
   // Pulizia finale (tutto corretto ora che calcoloPivot usa _mm_malloc)
- free(realDistances);
+  free(realDistances);
 
-// Libera strutture allocate con _mm_malloc
-_mm_free(input->DS);
-_mm_free(input->Q);
-_mm_free(input->P);
-_mm_free(input->index);
-_mm_free(input->id_nn);
-_mm_free(input->dist_nn);
+  // Libera strutture allocate con _mm_malloc
+  _mm_free(input->DS);
+  _mm_free(input->Q);
+  _mm_free(input->P);
+  _mm_free(input->index);
+  _mm_free(input->id_nn);
+  _mm_free(input->dist_nn);
 
-// Libera la struttura params
-free(input);
+  // Libera la struttura params
+  free(input);
 
 
   // nomeFittizio();
