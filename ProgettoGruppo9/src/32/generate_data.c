@@ -40,7 +40,7 @@ int main (int argc, char **argv) {
   }
   for (int i = 0; i < N; i++)
     for (int j = 0; j < D; j++)
-      dataset[i * D + j] = ((float)rand() / RAND_MAX) * 20 - 10;
+      dataset[i * D + j] = ((float)rand() / RAND_MAX) * 200 - 100;
   // scrivi su file
   save_data(datasetFileName, dataset, N, D);
   free(dataset);
@@ -53,7 +53,7 @@ int main (int argc, char **argv) {
     return -1;
   }
   for (int i = 0; i < D; i++)
-    query[i] = ((float)rand() / RAND_MAX) * 20 - 10;
+    query[i] = ((float)rand() / RAND_MAX) * 200 - 100;
   // scrivi su file
   save_data(queryFileName, query, 1, D);
   free(query);

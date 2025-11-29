@@ -6,44 +6,33 @@
 #include <stdio.h>
 #define FLT_MAX 3.402823466e+38F
 
-
 const int INDEXING_PROCEDURE_ERROR = -1;
+
+// Variabili globali per i dati quantizzati
 float *vPlus_all = NULL;
 float *vMinus_all = NULL;
 float *pPlus = NULL;
 float *pMinus = NULL;
 
 extern float prodScalare(float *v, float *w, int D);
+extern float dEuclidea(float *v, float *w, int D);
 
+// Funzione di pulizia (chiamata alla fine di predict)
 void freePreQuantization()
 {
-  if (vPlus_all)
-  {
-    free(vPlus_all);
-    vPlus_all = NULL;
-  }
-  if (vMinus_all)
-  {
-    free(vMinus_all);
-    vMinus_all = NULL;
-  }
-  if (pPlus)
-  {
-    free(pPlus);
-    pPlus = NULL;
-  }
-  if (pMinus)
-  {
-    free(pMinus);
-    pMinus = NULL;
-  }
+  if (vPlus_all) { free(vPlus_all); vPlus_all = NULL; }
+  if (vMinus_all) { free(vMinus_all); vMinus_all = NULL; }
+  if (pPlus) { free(pPlus); pPlus = NULL; }
+  if (pMinus) { free(pMinus); pMinus = NULL; }
 }
 
+// Gestione lista ordinata K-NN
 void insert_into_knn(float *KNN, int k, int id, float distance)
 {
   float max_distance = -1.0f;
   int max_index_id = -1;
 
+  // Trova il vicino più lontano attualmente in lista (il candidato ad uscire)
   for (int i = 0; i < k; i++)
   {
     int index_dist = (i * 2) + 1;
@@ -56,6 +45,7 @@ void insert_into_knn(float *KNN, int k, int id, float distance)
     }
   }
 
+  // Se la nuova distanza è minore del peggiore attuale, sostituisci
   if (distance < max_distance)
   {
     KNN[max_index_id] = (float)id;
@@ -63,18 +53,7 @@ void insert_into_knn(float *KNN, int k, int id, float distance)
   }
 }
 
-float dEuclidea(float *v, float *w, int D)
-{
-  float distanza = 0.0f;
-  for (int i = 0; i < D; i++)
-  {
-    float diff = v[i] - w[i];
-    distanza += diff * diff;
-  }
-  return sqrtf(distanza);
-}
-
-
+// Recupera la distanza massima attuale nella lista K-NN (il raggio di ricerca)
 float get_d_k_max(float *KNN, int k)
 {
   float max_distance = -1.0f;
@@ -89,6 +68,7 @@ float get_d_k_max(float *KNN, int k)
   return max_distance;
 }
 
+// Calcolo distanza approssimata (Eq. 2 del documento)
 float distanzaApprossimataPreQ(float *vPlus, float *vMinus, float *wPlus, float *wMinus, int D)
 {
   float posPos = prodScalare(vPlus, wPlus, D);
@@ -98,11 +78,13 @@ float distanzaApprossimataPreQ(float *vPlus, float *vMinus, float *wPlus, float 
   return posPos + negNeg - posNeg - negPos;
 }
 
+// Costruzione indice (distanze dataset <-> pivot)
 float *indexing(params* input)
 {
   int N = input->N;
   int h = input->h;
 
+  // Uso _mm_malloc per allineamento (SSE=16, AVX=32)
   float *output = _mm_malloc(N * h * sizeof(float), 16); 
   
   if (output == NULL) return NULL;
@@ -121,15 +103,15 @@ float *indexing(params* input)
   return output;
 }
 
-
-
+// Funzione di quantizzazione (versione HEAD)
 void quantizing(float *v, float *vMinus, float *vPlus, params* input, int *array_indici)
 {
   int D = input->D;
   int x = input->x;
+  
+  // N.B. array_indici viene passato dall'esterno per evitare allocazioni ripetute
 
   // 1. Reset e Inizializzazione
-  // Nota: array_indici serve solo come mappa per non scambiare i float originali
   for (int k = 0; k < D; k++)
   {
     array_indici[k] = k;
@@ -138,11 +120,9 @@ void quantizing(float *v, float *vMinus, float *vPlus, params* input, int *array
   }
 
   // 2. Cerco gli X elementi con valore assoluto massimo (Partial Selection Sort)
-  // Complessità: O(x * D) - Ottimo se x << D
   for (int i = 0; i < x; i++)
   {
     int maxIndex = i;
-    // Uso fabsf sui valori originali indicizzati da array_indici
     float maxVal = fabsf(v[array_indici[i]]); 
 
     for (int j = i + 1; j < D; j++)
@@ -156,19 +136,17 @@ void quantizing(float *v, float *vMinus, float *vPlus, params* input, int *array
       }
     }
 
-    // Scambio solo gli indici, non tocco il vettore v originale
+    // Scambio solo gli indici
     int temp = array_indici[i];
     array_indici[i] = array_indici[maxIndex];
     array_indici[maxIndex] = temp;
   }
 
   // 3. Assegnazione ai vettori vPlus e vMinus
-  // Fuso insieme alla gestione segno, eliminando il bug dello zero
   for (int i = 0; i < x; i++)
   {
-    int original_idx = array_indici[i]; // Recupero l'indice originale del top element
+    int original_idx = array_indici[i]; 
     
-    // Specifica progetto[cite: 44, 45, 51]: 
     // Se v >= 0 -> vPlus=1, altrimenti vMinus=1
     if (v[original_idx] >= 0) 
     {
@@ -181,12 +159,11 @@ void quantizing(float *v, float *vMinus, float *vPlus, params* input, int *array
   }
 }
 
-
-//extern void prova(params* input);
+// Selezione Pivot
 int *calcoloPivot(float *dataSet, int h, int N, int D)
 {
   printf("INIZIO CALCOLO PIVOT\n");
-  int *pivot = (int *)_mm_malloc(h * sizeof(int), 16);  //FIXME: andrebbe passato l'align della struct, non 16 hardcoded
+  int *pivot = (int *)_mm_malloc(h * sizeof(int), 16); 
   
   if (!pivot) return NULL; 
 
@@ -198,6 +175,7 @@ int *calcoloPivot(float *dataSet, int h, int N, int D)
   return pivot;
 }
 
+// Pre-quantizzazione intero Dataset
 void preQuantizeDataset(params *input)
 {
   int N = input->N;
@@ -213,18 +191,21 @@ void preQuantizeDataset(params *input)
     return;
   }
 
-  int *array_indici = malloc(D*sizeof(int));
+  // Buffer temporaneo per gli indici (richiesto dalla firma di quantizing)
+  int *idx_buff = malloc(D * sizeof(int));
 
   for (int i = 0; i < N; i++)
   {
     float *v = &input->DS[i * D];
     float *vp = &vPlus_all[i * D];
     float *vm = &vMinus_all[i * D];
-    quantizing(v, vm, vp, input, array_indici);
+    quantizing(v, vm, vp, input, idx_buff);
   }
-  free(array_indici);
+  
+  free(idx_buff);
 }
 
+// Pre-quantizzazione dei Pivot
 void preQuantizePivots(params *input)
 {
   int D = input->D;
@@ -241,13 +222,13 @@ void preQuantizePivots(params *input)
     return;
   }
 
-  int *array_indici = malloc(D*sizeof(int));
+  int *idx_buff = malloc(D * sizeof(int));
+
   for (int i = 0; i < h; i++)
   {
     int pivot_idx = input->P[i];
     if (pivot_idx < 0 || pivot_idx >= input->N) {
-      fprintf(stderr, "Pivot %d fuori range: %d\n", i, pivot_idx);
-      // imposta a zero la riga per sicurezza
+      // Gestione errore pivot fuori range
       float *pp = &pPlus[i * D];
       float *pm = &pMinus[i * D];
       for (int t = 0; t < D; t++) { pp[t]=0.0f; pm[t]=0.0f; }
@@ -256,11 +237,14 @@ void preQuantizePivots(params *input)
     float *p = &input->DS[pivot_idx * D];
     float *pp = &pPlus[i * D];
     float *pm = &pMinus[i * D];
-    quantizing(p, pm, pp, input, array_indici);
+    quantizing(p, pm, pp, input, idx_buff);
   }
-  free(array_indici);
+  
+  free(idx_buff);
 }
 
+// Funzione di ricerca per singola query
+// NOTA: Firma aggiornata per accettare buffer esterni (qPlus, qMinus, etc.)
 float *querying2(float *query, params *input, float *qPlus, float *qMinus, float *dQP, int *array_indici)
 {
   int D = input->D;
@@ -274,14 +258,12 @@ float *querying2(float *query, params *input, float *qPlus, float *qMinus, float
   // 2. Calcola d(q,p) per ogni pivot 
   for (int j = 0; j < h; j++)
   {
-    // Nota: pPlus/pMinus devono essere accessibili (es. da input->pPlus)
     float *pPlusC = &pPlus[j * D]; 
     float *pMinusC = &pMinus[j * D];
     dQP[j] = distanzaApprossimataPreQ(qPlus, qMinus, pPlusC, pMinusC, D);
   }
 
   // 3. Inizializza K-NN 
-  // Struttura: [id_0, dist_0, id_1, dist_1, ...]
   int dim = 2 * k;
   float *KNN = malloc(dim * sizeof(float));
   for (int i = 0; i < k; i++)
@@ -311,27 +293,23 @@ float *querying2(float *query, params *input, float *qPlus, float *qMinus, float
       continue;
 
     // C. Calcolo Distanza Approssimata 
-    // Nota: vPlus_all/vMinus_all dovrebbero essere in input->...
     float *vPlus = &vPlus_all[i * D];
     float *vMinus = &vMinus_all[i * D];
     float d_q_v_approx = distanzaApprossimataPreQ(qPlus, qMinus, vPlus, vMinus, D);
 
     // D. Inserimento basato su Distanza Approssimata 
-    // CORREZIONE: Qui usiamo d_q_v_approx, NON la Euclidea!
     if (d_q_v_approx < d_k_max)
     {
-      // Inserisce (i, d_q_v_approx) mantenendo la lista ordinata
       insert_into_knn(KNN, k, i, d_q_v_approx);
     }
   }
 
-  // 5. Raffinamento Finale (Ricalcolo Euclideo) 
+  // 5. Raffinamento Finale (Ricalcolo Euclideo - LOGICA HEAD)
   // Solo ora calcoliamo la distanza reale per i vincitori
   for (int i = 0; i < k; i++)
   {
      int id_vicino = (int)KNN[2 * i];
      
-     // Se la posizione è valida (non è -1)
      if (id_vicino >= 0) {
          float *v = &input->DS[id_vicino * D];
          // Sostituiamo la distanza approssimata con quella reale
@@ -342,16 +320,6 @@ float *querying2(float *query, params *input, float *qPlus, float *qMinus, float
   return KNN;
 }
 
-
-void printVector(const char* name, float* v, int D) {
-    printf("%s = [", name);
-    for(int i = 0; i < D; i++) {
-        printf(" %.3f", v[i]);
-    }
-    printf(" ]\n");
-}
-
-
 void fit(params* input){
   // Selezione dei pivot
   printf("INIZIO SELEZIONE PIVOT\n");
@@ -359,13 +327,11 @@ void fit(params* input){
   if (!input->P)
   {
     fprintf(stderr, "Errore calcolo pivot!\n");
-    // input->DS è stato allocato con _mm_malloc in load_data -> usare _mm_free
     if (input->DS) _mm_free(input->DS);
     return;
   }
   printf("FINE SELEZIONE PIVOT\n");
   
-
   // pre-quantizzazione dataset
   printf("INIZIO PRE-QUANTIZZAZIONE DATASET\n");
   preQuantizeDataset(input);
@@ -395,15 +361,12 @@ void fit(params* input){
   if (!input->index)
   {
     fprintf(stderr, "Errore indexing!\n");
-    // pulizie
     if (input->P) _mm_free(input->P);
     freePreQuantization();
     exit(INDEXING_PROCEDURE_ERROR);
   }
   printf("FINE COSTRUZIONE INDICE\n");
-
 }
-
 
 void predict(params* input){
   int nq = input->nq;
@@ -411,27 +374,33 @@ void predict(params* input){
   int k = input->k;
   int h = input->h;
 
+  // Allocazione buffer temporanei FUORI dal ciclo per performance
+  // Questo abilita la logica usata in querying2
   float *qPlus = malloc(D * sizeof(float));
   float *qMinus = malloc(D * sizeof(float));
-  int *array_indici = malloc(D*sizeof(int));
   float *dQP = malloc(h * sizeof(float));
+  int *array_indici = malloc(D * sizeof(int));
 
   for(int i = 0; i < nq; i++) {
     float *query = &input->Q[i*D];
     
+    // Passiamo i buffer allocati
     float *KNN = querying2(query, input, qPlus, qMinus, dQP, array_indici);
 
     for (int j = 0; j < k; j++) {
-      input->id_nn[i*k + j] = (int) KNN[2*j];     
-      input->dist_nn[i*k + j] = KNN[2*j + 1];    
+      input->id_nn[i*k + j] = (int) KNN[2*j];      
+      input->dist_nn[i*k + j] = KNN[2*j + 1];     
     }
 
     free(KNN); 
   }
+
+  // Pulizia buffer temporanei
   free(qPlus);
   free(qMinus);
-  free(array_indici);
   free(dQP);
+  free(array_indici);
 
+  // Pulizia dati quantizzati globali
   freePreQuantization();
 }

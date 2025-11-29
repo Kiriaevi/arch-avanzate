@@ -6,7 +6,6 @@
 #include "common.h"
 #include "quantpivot32.c"
 
-
 static int N; // Righe dataset
 static int D;  // Colonne dataset
 static int h;   // numero di pivot
@@ -34,17 +33,16 @@ float *querying(float *query, float *pivot, float *dataSet, float *vettoreIndexi
 
 
 /*
+ * load_data
+ * =========
  *
- * 	load_data
- * 	=========
+ * Legge da file una matrice di N righe
+ * e M colonne e la memorizza in un array lineare in row-major order
  *
- *	Legge da file una matrice di N righe
- * 	e M colonne e la memorizza in un array lineare in row-major order
- *
- * 	Codifica del file:
- * 	primi 4 byte: numero di righe (N) --> numero intero
- * 	successivi 4 byte: numero di colonne (M) --> numero intero
- * 	successivi N*M*4 byte: matrix data in row-major order --> numeri floating-point a precisione singola
+ * Codifica del file:
+ * primi 4 byte: numero di righe (N) --> numero intero
+ * successivi 4 byte: numero di colonne (M) --> numero intero
+ * successivi N*M*4 byte: matrix data in row-major order --> numeri floating-point a precisione singola
  */
 MATRIX load_data(char* filename, int *n, int *k) {
   FILE* fp;
@@ -72,16 +70,14 @@ MATRIX load_data(char* filename, int *n, int *k) {
 }
 
 /*
- * 	save_data
- * 	=========
- * 
- *	Salva su file un array lineare in row-major order
- *	come matrice di N righe e M colonne
- * 
- * 	Codifica del file:
- * 	primi 4 byte: numero di righe (N) --> numero intero a 32 bit
- * 	successivi 4 byte: numero di colonne (M) --> numero intero a 32 bit
- * 	successivi N*M*4 byte: matrix data in row-major order --> numeri interi o floating-point a precisione singola
+ * save_data
+ * =========
+ * * Salva su file un array lineare in row-major order
+ * come matrice di N righe e M colonne
+ * * Codifica del file:
+ * primi 4 byte: numero di righe (N) --> numero intero a 32 bit
+ * successivi 4 byte: numero di colonne (M) --> numero intero a 32 bit
+ * successivi N*M*4 byte: matrix data in row-major order --> numeri interi o floating-point a precisione singola
  */
 void save_data(char* filename, void* X, int n, int k)
 {
@@ -101,209 +97,8 @@ void save_data(char* filename, void* X, int n, int k)
 }
 
 
-
-//void testQueryingCompleto()
-//{
-//  printf("\n===== TEST querying COMPLETO =====\n");
-//
-//  // 1. Genera dataset casuale
-//  float *dataset = malloc(N * D *  sizeof(float));
-//  if (!dataset)
-//  {
-//    fprintf(stderr, "Errore allocazione dataset!\n");
-//    return;
-//  }
-//
-//  for (int i = 0; i < N; i++)
-//    for (int j = 0; j < D; j++)
-//      dataset[i * D + j] = ((float)rand() / RAND_MAX) * 20 - 10;
-//
-//  // 2. Calcola pivot e pre-quantizzazione
-//  float *pivot = calcoloPivot(dataset, h, N, D);
-//  if (!pivot)
-//  {
-//    fprintf(stderr, "Errore calcolo pivot!\n");
-//    free(dataset);
-//    return;
-//  }
-//
-//  preQuantizeDataset(dataset);
-//  preQuantizePivots(pivot);
-//
-//  // 3. Costruisci indice
-//  float *vettoreIndexing = indexing(pivot, dataset);
-//  if (!vettoreIndexing)
-//  {
-//    fprintf(stderr, "Errore indexing!\n");
-//    free(dataset);
-//    free(pivot);
-//    freePreQuantization();
-//    return;
-//  }
-//
-//  // 4. Genera query casuale
-//  float *query = malloc(D * sizeof(float));
-//  if (!query)
-//  {
-//    fprintf(stderr, "Errore allocazione query!\n");
-//    free(dataset);
-//    free(pivot);
-//    free(vettoreIndexing);
-//    freePreQuantization();
-//    return;
-//  }
-//
-//  for (int i = 0; i < D; i++)
-//    query[i] = ((float)rand() / RAND_MAX) * 20 - 10;
-//
-//  // 5. Esegui KNN approssimato
-//  float *KNN = querying2(query, pivot, dataset, vettoreIndexing);
-//  if (!KNN)
-//  {
-//    fprintf(stderr, "Errore querying!\n");
-//    free(dataset);
-//    free(pivot);
-//    free(vettoreIndexing);
-//    free(query);
-//    freePreQuantization();
-//    return;
-//  }
-//
-//  printf("\nK-NN trovati da querying (id, distanza reale):\n");
-//  for (int i = 0; i < k; i++)
-//  {
-//    int id = (int)KNN[i * 2];
-//    float dist = KNN[i * 2 + 1];
-//    if (id != -1)
-//      printf("%d: %.4f\n", id, dist);
-//  }
-//
-//  // 6. Calcola distanze euclidee reali - USA UN ARRAY SEPARATO
-//  float *realDistances = malloc(N * sizeof(float));
-//  if (!realDistances)
-//  {
-//    fprintf(stderr, "Errore allocazione realDistances!\n");
-//    free(dataset);
-//    free(pivot);
-//    free(vettoreIndexing);
-//    free(KNN);
-//    free(query);
-//    freePreQuantization();
-//    return;
-//  }
-//
-//  // FIXME: la distanza va calcolata tra le query e i pivot, non query e TUTTO il dataset
-//  // CALCOLA TUTTE LE DISTANZE
-//  for (int i = 0; i < N; i++)
-//  {
-//    float *v = &dataset[i * D];
-//    realDistances[i] = dEuclidea(query, v);
-//  }
-//
-//  // 7. Crea una COPIA per l'ordinamento
-//  float *sortedDistances = malloc(N * sizeof(float));
-//  if (!sortedDistances)
-//  {
-//    fprintf(stderr, "Errore allocazione sortedDistances!\n");
-//    free(realDistances);
-//    free(dataset);
-//    free(pivot);
-//    free(vettoreIndexing);
-//    free(KNN);
-//    free(query);
-//    freePreQuantization();
-//    return;
-//  }
-//  memcpy(sortedDistances, realDistances, N * sizeof(float));
-//
-//  printf("\nK-NN reali (distanza euclidea):\n");
-//  for (int n = 0; n < k; n++)
-//  {
-//    int min_idx = -1;
-//    float min_val = FLT_MAX;
-//    for (int i = 0; i < N; i++)
-//    {
-//      if (sortedDistances[i] < min_val)
-//      {
-//        min_val = sortedDistances[i];
-//        min_idx = i;
-//      }
-//    }
-//    if (min_idx != -1)
-//    {
-//      printf("%d: %.4f\n", min_idx, min_val);
-//      sortedDistances[min_idx] = FLT_MAX;
-//    }
-//  }
-//
-//  // 8. Verifica errori - USA realDistances ORIGINALE
-//  float max_dist_knn = 0.0f;
-//  for (int i = 0; i < k; i++)
-//    if (KNN[i * 2 + 1] > max_dist_knn)
-//      max_dist_knn = KNN[i * 2 + 1];
-//
-//  int errori = 0;
-//  for (int i = 0; i < N; i++)
-//  {
-//    int in_knn = 0;
-//    for (int j = 0; j < k; j++)
-//      if ((int)KNN[j * 2] == i)
-//      {
-//        in_knn = 1;
-//        break;
-//      }
-//
-//    if (!in_knn)
-//    {
-//      // USA realDistances che non è stato modificato!
-//      float dist = realDistances[i];
-//      if (dist < max_dist_knn)
-//      {
-//        printf("ERRORE: punto %d escluso ma distanza %.4f < %.4f\n",
-//               i, dist, max_dist_knn);
-//        errori++;
-//      }
-//    }
-//  }
-//
-//  if (errori == 0)
-//    printf("✓ Nessun errore! Tutti i punti esclusi sono effettivamente più lontani.\n");
-//  else
-//    printf("✗ Trovati %d errori!\n", errori);
-//
-//  // 9. Libera memoria
-//  free(sortedDistances);
-//  free(realDistances);
-//  free(dataset);
-//  free(pivot);
-//  free(vettoreIndexing);
-//  free(KNN);
-//  free(query);
-//  freePreQuantization();
-//}
-
 int main(int argc, char **argv)
 {
-  //srand((unsigned)time(NULL));
-  //if (argc < 6) {
-  //  N = 2000;
-  //  D = 256;
-  //  h = 16;
-  //  x = 8;
-  //  k = 8;
-  //} else {
-  //  N = atoi(argv[1]);
-  //  D = atoi(argv[2]);
-  //  h = atoi(argv[3]);
-  //  x = atoi(argv[4]);
-  //  k = atoi(argv[5]);
-  //}
-  //if (argc > 6)
-  //{
-  //  printf("Inserisci numero di valori appropritato");
-  //}
-
-
   // ================= Parametri di ingresso =================
   char* dsfilename = "dataset_2000x256_32.ds2";
   char* queryfilename = "query_2000x256_32.ds2";
@@ -332,7 +127,7 @@ int main(int argc, char **argv)
   N = input->N;
   D = input->D;
   printf("N = %d, D = %d, h = %d, x = %d, k = %d\n", N,D,h,x,k);
-
+  
   clock_t t;
   double elapsed;
 
@@ -341,7 +136,6 @@ int main(int argc, char **argv)
   t = clock() - t;
   elapsed = ((double)t) / CLOCKS_PER_SEC;
   printf("FIT time = %.5f secs\n", elapsed);
-
 
   if(!input->silent)
     printf("FIT time = %.5lf secs\n", elapsed);
@@ -363,12 +157,10 @@ int main(int argc, char **argv)
     printf("%.3lf\n", elapsed);
 
 
-
-
   printf("\n=== CONFRONTO PRIME DISTANZE ===\n");
 
     // 1. Definisci quanti elementi stampare
-    int M = 20;                 
+    int M = 20;                  
     if (M > input->k) M = input->k; // <--- FIX CRUCIALE: Non stampare più di k!
     if (M > input->N) M = input->N;
 
@@ -415,8 +207,7 @@ int main(int argc, char **argv)
     }
 
     free(approx);
-    free(real);\
-
+    free(real);
 
   // Salva il risultato
   char* outname_id = "out_idnn.ds2";
@@ -493,10 +284,5 @@ int main(int argc, char **argv)
   // Libera la struttura params
   free(input);
 
-
-  // nomeFittizio();
-  // testDistanzaApprossimata();
-  // testIndexing();
-  //testQueryingCompleto();
   return 0;
 }
