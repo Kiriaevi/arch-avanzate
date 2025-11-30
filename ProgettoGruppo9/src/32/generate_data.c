@@ -1,10 +1,12 @@
 #include <stdio.h>
 #include <time.h>
 #include <stdlib.h>
+#include "common.h"
 
 #define datasetFileName "generated_dataset.ds2"
 #define queryFileName "generated_queries.ds2"
-#define type float
+#define MAX_VALUE  20
+#define MIN_VALUE  10
 
 void save_data(const char* filename, void* arr, int N, int D)
 {
@@ -32,7 +34,7 @@ int main (int argc, char **argv) {
   int N = atoi(argv[1]);
   int D = atoi(argv[2]);
 
-  float *dataset = (float *) malloc(N * D *  sizeof(float));
+  VECTOR dataset = (VECTOR) malloc(N * D *  sizeof(type));
   if (!dataset)
   {
     fprintf(stderr, "Errore allocazione dataset!\n");
@@ -40,12 +42,12 @@ int main (int argc, char **argv) {
   }
   for (int i = 0; i < N; i++)
     for (int j = 0; j < D; j++)
-      dataset[i * D + j] = ((float)rand() / RAND_MAX) * 200 - 100;
+      dataset[i * D + j] = ((type)rand() / RAND_MAX) * MAX_VALUE - MIN_VALUE;
   // scrivi su file
   save_data(datasetFileName, dataset, N, D);
   free(dataset);
 
-  float *query = (float *)malloc(D * sizeof(float));
+  VECTOR query = (VECTOR)malloc(N * D * sizeof(type));
   if (!query)
   {
     fprintf(stderr, "Errore allocazione query!\n");
@@ -53,9 +55,9 @@ int main (int argc, char **argv) {
     return -1;
   }
   for (int i = 0; i < D; i++)
-    query[i] = ((float)rand() / RAND_MAX) * 200 - 100;
+    query[i] = ((type)rand() / RAND_MAX) * MAX_VALUE - MIN_VALUE;
   // scrivi su file
-  save_data(queryFileName, query, 1, D);
+  save_data(queryFileName, query, N, D);
   free(query);
 
   return 0;
