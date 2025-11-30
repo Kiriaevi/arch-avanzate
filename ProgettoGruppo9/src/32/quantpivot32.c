@@ -4,18 +4,25 @@
 #include "common.h"
 #include <math.h>
 #include <stdio.h>
-#define FLT_MAX 3.402823466e+38F
 
 const int INDEXING_PROCEDURE_ERROR = -1;
 
 // Variabili globali per i dati quantizzati
-float *vPlus_all = NULL;
-float *vMinus_all = NULL;
-float *pPlus = NULL;
-float *pMinus = NULL;
+VECTOR vPlus_all = NULL;
+VECTOR vMinus_all = NULL;
+VECTOR pPlus = NULL;
+VECTOR pMinus = NULL;
 
-extern float prodScalare(float *v, float *w, int D);
-extern float dEuclidea(float *v, float *w, int D);
+/* Ma che vuol dire che in C non c'è l'overloading della funzioni... -> https://en.cppreference.com/w/c/language/generic.html*/
+extern float prodScalaref(float *v, float *w, int D);
+extern double prodScalared(double *v, double *w, int D);
+#define prodScalare(v,w,D) _Generic((v), float*: prodScalaref, double*:prodScalared)(v,w,D) 
+extern float dEuclideaf(float *v, float *w, int D);
+extern double dEuclidead(double *v, double *w, int D);
+#define dEuclidea(v,w,D) _Generic((v), float*: dEuclideaf, double*:dEuclidead)(v,w,D) 
+
+/*GENERALIZZO IL PROGRAMMA PER FUNZIONARE SIA CON DOUBLE CHE CON FLOAT*/
+#define ABS(x) _Generic((x), float: fabsf, double: fabs)(x)
 
 // Funzione di pulizia (chiamata alla fine di predict)
 void freePreQuantization()
@@ -27,16 +34,16 @@ void freePreQuantization()
 }
 
 // Gestione lista ordinata K-NN
-void insert_into_knn(float *KNN, int k, int id, float distance)
+void insert_into_knn(VECTOR KNN, int k, int id, type distance)
 {
-  float max_distance = -1.0f;
+  type max_distance = -1.0f;
   int max_index_id = -1;
 
   // Trova il vicino più lontano attualmente in lista (il candidato ad uscire)
   for (int i = 0; i < k; i++)
   {
     int index_dist = (i * 2) + 1;
-    float current_distance = KNN[index_dist];
+    type current_distance = KNN[index_dist];
 
     if (current_distance > max_distance)
     {
@@ -48,18 +55,18 @@ void insert_into_knn(float *KNN, int k, int id, float distance)
   // Se la nuova distanza è minore del peggiore attuale, sostituisci
   if (distance < max_distance)
   {
-    KNN[max_index_id] = (float)id;
+    KNN[max_index_id] = (type)id;
     KNN[max_index_id + 1] = distance;
   }
 }
 
 // Recupera la distanza massima attuale nella lista K-NN (il raggio di ricerca)
-float get_d_k_max(float *KNN, int k)
+type get_d_k_max(VECTOR KNN, int k)
 {
-  float max_distance = -1.0f;
+  type max_distance = -1.0f;
   for (int i = 0; i < k; i++)
   {
-    float current_distance = KNN[(i * 2) + 1];
+    type current_distance = KNN[(i * 2) + 1];
     if (current_distance > max_distance)
     {
       max_distance = current_distance;
@@ -69,34 +76,33 @@ float get_d_k_max(float *KNN, int k)
 }
 
 // Calcolo distanza approssimata (Eq. 2 del documento)
-float distanzaApprossimataPreQ(float *vPlus, float *vMinus, float *wPlus, float *wMinus, int D)
+type distanzaApprossimataPreQ(VECTOR vPlus, VECTOR vMinus, VECTOR wPlus, VECTOR wMinus, int D)
 {
-  float posPos = prodScalare(vPlus, wPlus, D);
-  float negNeg = prodScalare(vMinus, wMinus, D);
-  float posNeg = prodScalare(vPlus, wMinus, D);
-  float negPos = prodScalare(vMinus, wPlus, D);
+  type posPos = prodScalare(vPlus, wPlus, D);
+  type negNeg = prodScalare(vMinus, wMinus, D);
+  type posNeg = prodScalare(vPlus, wMinus, D);
+  type negPos = prodScalare(vMinus, wPlus, D);
   return posPos + negNeg - posNeg - negPos;
 }
 
 // Costruzione indice (distanze dataset <-> pivot)
-float *indexing(params* input)
+VECTOR indexing(params* input)
 {
   int N = input->N;
   int h = input->h;
 
-  // Uso _mm_malloc per allineamento (SSE=16, AVX=32)
-  float *output = _mm_malloc(N * h * sizeof(float), 16); 
+  VECTOR output = _mm_malloc(N * h * sizeof(type), align); 
   
   if (output == NULL) return NULL;
 
   for (int r = 0; r < N; r++)
   {
-    float *vPlus = &vPlus_all[r * input->D]; 
-    float *vMinus = &vMinus_all[r * input->D];
+    VECTOR vPlus = &vPlus_all[r * input->D]; 
+    VECTOR vMinus = &vMinus_all[r * input->D];
     for (int c = 0; c < h; c++)
     {
-      float *pPlusC = &pPlus[c * input->D];
-      float *pMinusC = &pMinus[c * input->D];
+      VECTOR pPlusC = &pPlus[c * input->D];
+      VECTOR pMinusC = &pMinus[c * input->D];
       output[r * h + c] = distanzaApprossimataPreQ(vPlus, vMinus, pPlusC, pMinusC, input->D);
     }
   }
@@ -104,7 +110,7 @@ float *indexing(params* input)
 }
 
 // Funzione di quantizzazione (versione HEAD)
-void quantizing(float *v, float *vMinus, float *vPlus, params* input, int *array_indici)
+void quantizing(VECTOR v, VECTOR vMinus, VECTOR vPlus, params* input, int *array_indici)
 {
   int D = input->D;
   int x = input->x;
@@ -123,11 +129,11 @@ void quantizing(float *v, float *vMinus, float *vPlus, params* input, int *array
   for (int i = 0; i < x; i++)
   {
     int maxIndex = i;
-    float maxVal = fabsf(v[array_indici[i]]); 
+    type maxVal = ABS(v[array_indici[i]]); 
 
     for (int j = i + 1; j < D; j++)
     {
-      float currentVal = fabsf(v[array_indici[j]]);
+      type currentVal = ABS(v[array_indici[j]]);
 
       if (currentVal > maxVal)
       {
@@ -150,24 +156,32 @@ void quantizing(float *v, float *vMinus, float *vPlus, params* input, int *array
     // Se v >= 0 -> vPlus=1, altrimenti vMinus=1
     if (v[original_idx] >= 0) 
     {
-      vPlus[original_idx] = 1.0f;
+      vPlus[original_idx] = 1.0;
     }
     else 
     {
-      vMinus[original_idx] = 1.0f;
+      vMinus[original_idx] = 1.0;
     }
   }
 }
 
 // Selezione Pivot
-int *calcoloPivot(float *dataSet, int h, int N, int D)
+// FIXME: qui ho un dubbio, devo mettere VECTOR al dataset o MATRIX?
+int *calcoloPivot(VECTOR dataSet, int h, int N, int D)
 {
   printf("INIZIO CALCOLO PIVOT\n");
-  int *pivot = (int *)_mm_malloc(h * sizeof(int), 16); 
+  int *pivot = (int *)_mm_malloc(h * sizeof(int), align); 
   
   if (!pivot) return NULL; 
 
-  int offset = (int)floorf((float)N / h);
+  /* README: il motivo per cui faccio N/h senza applicare l'istruzione di floorf
+     è perché già in automatico la divisione tra due float porta a troncamento per difetto,
+     c'è un solo caso in cui non porta a questo risultato, se i numeri sono negativi, siccome
+     qui sono sempre positivi (N e h) allora non ci preoccupiamo di quel caso limite
+     es.: 10/6 -> 1.666 -> 1, ed è vero sia se facciamo N/h che floorf((float)N/h)
+     invece se facessimo -35/10 -> -3.5 -> se lasciamo N/h diventa = -3, con floorf -> -4
+     int offset = (int)floorf((float)N / h); */
+  int offset = N/h;
   for (int i = 0; i < h; i++)
     pivot[i] = i * offset;
     
@@ -180,8 +194,8 @@ void preQuantizeDataset(params *input)
 {
   int N = input->N;
   int D = input->D;
-  vPlus_all = malloc((size_t)N * D * sizeof(float));
-  vMinus_all = malloc((size_t)N * D * sizeof(float));
+  vPlus_all = malloc((size_t)N * D * sizeof(type));
+  vMinus_all = malloc((size_t)N * D * sizeof(type));
 
   if (!vPlus_all || !vMinus_all) {
     fprintf(stderr, "Errore allocazione vPlus_all/vMinus_all\n");
@@ -191,14 +205,13 @@ void preQuantizeDataset(params *input)
     return;
   }
 
-  // Buffer temporaneo per gli indici (richiesto dalla firma di quantizing)
   int *idx_buff = malloc(D * sizeof(int));
 
   for (int i = 0; i < N; i++)
   {
-    float *v = &input->DS[i * D];
-    float *vp = &vPlus_all[i * D];
-    float *vm = &vMinus_all[i * D];
+    VECTOR v = &input->DS[i * D];
+    VECTOR vp = &vPlus_all[i * D];
+    VECTOR vm = &vMinus_all[i * D];
     quantizing(v, vm, vp, input, idx_buff);
   }
   
@@ -211,8 +224,8 @@ void preQuantizePivots(params *input)
   int D = input->D;
   int h = input->h;
 
-  pPlus  = malloc((size_t)h * D * sizeof(float));
-  pMinus = malloc((size_t)h * D * sizeof(float));
+  pPlus  = malloc((size_t)h * D * sizeof(type));
+  pMinus = malloc((size_t)h * D * sizeof(type));
 
   if (!pPlus || !pMinus) {
     fprintf(stderr, "Errore allocazione pPlus/pMinus\n");
@@ -229,14 +242,14 @@ void preQuantizePivots(params *input)
     int pivot_idx = input->P[i];
     if (pivot_idx < 0 || pivot_idx >= input->N) {
       // Gestione errore pivot fuori range
-      float *pp = &pPlus[i * D];
-      float *pm = &pMinus[i * D];
-      for (int t = 0; t < D; t++) { pp[t]=0.0f; pm[t]=0.0f; }
+      VECTOR pp = &pPlus[i * D];
+      VECTOR pm = &pMinus[i * D];
+      for (int t = 0; t < D; t++) { pp[t]=0.0; pm[t]=0.0; }
       continue;
     }
-    float *p = &input->DS[pivot_idx * D];
-    float *pp = &pPlus[i * D];
-    float *pm = &pMinus[i * D];
+    VECTOR p = &input->DS[pivot_idx * D];
+    VECTOR pp = &pPlus[i * D];
+    VECTOR pm = &pMinus[i * D];
     quantizing(p, pm, pp, input, idx_buff);
   }
   
@@ -245,7 +258,7 @@ void preQuantizePivots(params *input)
 
 // Funzione di ricerca per singola query
 // NOTA: Firma aggiornata per accettare buffer esterni (qPlus, qMinus, etc.)
-float *querying2(float *query, params *input, float *qPlus, float *qMinus, float *dQP, int *array_indici)
+void querying2(VECTOR query, params *input, VECTOR qPlus, VECTOR qMinus, VECTOR dQP, int *array_indici, VECTOR KNN)
 {
   int D = input->D;
   int h = input->h;
@@ -258,44 +271,42 @@ float *querying2(float *query, params *input, float *qPlus, float *qMinus, float
   // 2. Calcola d(q,p) per ogni pivot 
   for (int j = 0; j < h; j++)
   {
-    float *pPlusC = &pPlus[j * D]; 
-    float *pMinusC = &pMinus[j * D];
+    VECTOR pPlusC = &pPlus[j * D]; 
+    VECTOR pMinusC = &pMinus[j * D];
     dQP[j] = distanzaApprossimataPreQ(qPlus, qMinus, pPlusC, pMinusC, D);
   }
 
   // 3. Inizializza K-NN 
-  int dim = 2 * k;
-  float *KNN = malloc(dim * sizeof(float));
   for (int i = 0; i < k; i++)
   {
     KNN[2 * i] = -1.0f;     // ID
-    KNN[2 * i + 1] = FLT_MAX; // Distanza
+    KNN[2 * i + 1] = INFINITY; // Distanza
   }
 
   // 4. Itera sul dataset 
   for (int i = 0; i < N; i++)
   {
     // A. Calcolo Lower Bound coi Pivot 
-    float best_lb = 0.0f;
+    type best_lb = 0.0;
     for (int j = 0; j < h; j++)
     {
-      float d_vi_pj = input->index[i * h + j]; // Accesso all'indice precalcolato
-      float lb = fabsf(d_vi_pj - dQP[j]);
+      type d_vi_pj = input->index[i * h + j]; // Accesso all'indice precalcolato
+      type lb = ABS(d_vi_pj - dQP[j]);
       if (lb > best_lb)
         best_lb = lb;
     }
 
     // Recupera la distanza massima attuale nel K-NN
-    float d_k_max = get_d_k_max(KNN, k);
+    type d_k_max = get_d_k_max(KNN, k);
 
     // B. Filtro Pivot 
     if (best_lb >= d_k_max)
       continue;
 
     // C. Calcolo Distanza Approssimata 
-    float *vPlus = &vPlus_all[i * D];
-    float *vMinus = &vMinus_all[i * D];
-    float d_q_v_approx = distanzaApprossimataPreQ(qPlus, qMinus, vPlus, vMinus, D);
+    VECTOR vPlus = &vPlus_all[i * D];
+    VECTOR vMinus = &vMinus_all[i * D];
+    type d_q_v_approx = distanzaApprossimataPreQ(qPlus, qMinus, vPlus, vMinus, D);
 
     // D. Inserimento basato su Distanza Approssimata 
     if (d_q_v_approx < d_k_max)
@@ -311,13 +322,11 @@ float *querying2(float *query, params *input, float *qPlus, float *qMinus, float
      int id_vicino = (int)KNN[2 * i];
      
      if (id_vicino >= 0) {
-         float *v = &input->DS[id_vicino * D];
+         VECTOR v = &input->DS[id_vicino * D];
          // Sostituiamo la distanza approssimata con quella reale
          KNN[2 * i + 1] = dEuclidea(query, v, D); 
      }
   }
-
-  return KNN;
 }
 
 void fit(params* input){
@@ -376,24 +385,23 @@ void predict(params* input){
 
   // Allocazione buffer temporanei FUORI dal ciclo per performance
   // Questo abilita la logica usata in querying2
-  float *qPlus = malloc(D * sizeof(float));
-  float *qMinus = malloc(D * sizeof(float));
-  float *dQP = malloc(h * sizeof(float));
+  VECTOR qPlus = malloc(D * sizeof(type));
+  VECTOR qMinus = malloc(D * sizeof(type));
+  VECTOR dQP = malloc(h * sizeof(type));
   int *array_indici = malloc(D * sizeof(int));
 
+  VECTOR KNN = malloc(2*k * sizeof(type));
   for(int i = 0; i < nq; i++) {
-    float *query = &input->Q[i*D];
-    
-    // Passiamo i buffer allocati
-    float *KNN = querying2(query, input, qPlus, qMinus, dQP, array_indici);
+    VECTOR query = &input->Q[i*D];
+    querying2(query, input, qPlus, qMinus, dQP, array_indici, KNN);
 
     for (int j = 0; j < k; j++) {
       input->id_nn[i*k + j] = (int) KNN[2*j];      
       input->dist_nn[i*k + j] = KNN[2*j + 1];     
     }
 
-    free(KNN); 
   }
+  free(KNN); 
 
   // Pulizia buffer temporanei
   free(qPlus);

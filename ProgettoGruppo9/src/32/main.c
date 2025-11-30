@@ -13,25 +13,6 @@ static int x;   // parametro di quantizzazione
 static int k;    // numero di vicini
 static int silent;
 
-extern float prodScalare(float *v, float *w, int D);
-
-#define FLT_MAX 3.402823466e+38F
-
-//
-// ---------------------------------------------------------------
-//  PROTOTIPI
-// ---------------------------------------------------------------
-float *readFile(char *f);
-float *executeQuery(float q);
-
-// Aggiornato: firma per buffer esterni
-float distanzaApprossimata(float *v, float *w, float *vMinus, float *vPlus, float *wMinus, float *wPlus);
-
-void testQueryingCompleto();
-
-float *querying(float *query, float *pivot, float *dataSet, float *vettoreIndexing);
-
-
 /*
  * load_data
  * =========
@@ -164,13 +145,13 @@ int main(int argc, char **argv)
     if (M > input->k) M = input->k; // <--- FIX CRUCIALE: Non stampare più di k!
     if (M > input->N) M = input->N;
 
-    float *approx = malloc(M * sizeof(float));
-    float *real = malloc(input->N * sizeof(float));
+    VECTOR approx = malloc(M * sizeof(type));
+    VECTOR real = malloc(input->N * sizeof(type));
 
     // Prendi la prima query (Q0)
     // Nota: input->dist_nn è un array piatto. Per la query i-esima, 
     // l'offset è (i * k). Qui stiamo guardando la query 0.
-    float *queryVec = &input->Q[0 * D];
+    VECTOR queryVec = &input->Q[0 * D];
 
     // --- 1) PRENDO LE DISTANZE TROVATE DAL TUO ALGORITMO ---
     for(int j = 0; j < M; j++) {
@@ -180,7 +161,7 @@ int main(int argc, char **argv)
     // --- 2) CALCOLO TUTTE LE DISTANZE REALI (VERIFICA BRUTE FORCE) ---
     // (Questo serve solo per vedere se il tuo approx ha senso)
     for(int i = 0; i < input->N; i++) {
-        float *vec = &input->DS[i * D];
+        VECTOR vec = &input->DS[i * D];
         real[i] = dEuclidea(queryVec, vec, D);
     }
 
@@ -190,7 +171,7 @@ int main(int argc, char **argv)
         for(int b=a+1; b<input->N; b++){
             if(real[b] < real[min_idx]) min_idx = b;
         }
-        float tmp = real[a];
+        type tmp = real[a];
         real[a] = real[min_idx];
         real[min_idx] = tmp;
     }
@@ -233,13 +214,13 @@ int main(int argc, char **argv)
 
   // CALCOLO DISTANZA REALE
   // CALCOLO DISTANZA REALE
-  float *realDistances = malloc(input->nq*k*sizeof(float));
+  VECTOR realDistances = malloc(input->nq*k*sizeof(type));
   for (int i = 0; i < input->nq; i++)
   {
-    float *queryVec = &input->Q[i * D];  // ✅ Prendi la query i-esima
+    VECTOR queryVec = &input->Q[i * D];  // ✅ Prendi la query i-esima
     for(int j = 0; j < k; j++) {
       int idx = input->id_nn[i*k+j];
-      float *neighborVec = &input->DS[idx * D];  // ✅ Moltiplica per D
+      VECTOR neighborVec = &input->DS[idx * D];  // ✅ Moltiplica per D
       realDistances[i*k+j] = dEuclidea(queryVec, neighborVec, D);
     }
   }
@@ -250,19 +231,19 @@ int main(int argc, char **argv)
     //printf("Query #%d:\n", i);
 
     // FIX 1: Il vettore di partenza è la QUERY, non il dataset!
-    float *queryVec = &input->Q[i * D]; 
+    VECTOR queryVec = &input->Q[i * D]; 
 
     for (int j = 0; j < k; j++) {
       int idx_neighbor = input->id_nn[i*k+j]; // ID del vicino trovato
 
       // FIX 2: Calcolo indirizzo vettore vicino. 
       // DEVI moltiplicare idx_neighbor * D per saltare i vettori precedenti!
-      float *neighborVec = &input->DS[idx_neighbor * D]; 
+      VECTOR neighborVec = &input->DS[idx_neighbor * D]; 
 
       // Calcolo distanza reale (senza ottimizzazioni, per verifica)
-      float real = dEuclidea(queryVec, neighborVec, D);
+      type real = dEuclidea(queryVec, neighborVec, D);
 
-      float stored = input->dist_nn[i*k+j];
+      type stored = input->dist_nn[i*k+j];
 
       /*printf("  NN %d (ID %d): Real: %10.5f | Stored: %10.5f | Diff: %e\n", 
         j, idx_neighbor, real, stored, real - stored);*/
