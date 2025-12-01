@@ -6,6 +6,7 @@
 #include <stdio.h>
 
 const int INDEXING_PROCEDURE_ERROR = -1;
+const int BLOCK_SIZE = 1024;
 
 // Variabili globali per i dati quantizzati
 VECTOR vPlus_all = NULL;
@@ -92,7 +93,7 @@ VECTOR indexing(params* input)
   int h = input->h;
 
   VECTOR output = _mm_malloc(N * h * sizeof(type), align); 
-  
+
   if (output == NULL) return NULL;
 
   for (int r = 0; r < N; r++)
@@ -114,7 +115,7 @@ void quantizing(VECTOR v, VECTOR vMinus, VECTOR vPlus, params* input, int *array
 {
   int D = input->D;
   int x = input->x;
-  
+
   // N.B. array_indici viene passato dall'esterno per evitare allocazioni ripetute
 
   // 1. Reset e Inizializzazione
@@ -152,7 +153,7 @@ void quantizing(VECTOR v, VECTOR vMinus, VECTOR vPlus, params* input, int *array
   for (int i = 0; i < x; i++)
   {
     int original_idx = array_indici[i]; 
-    
+
     // Se v >= 0 -> vPlus=1, altrimenti vMinus=1
     if (v[original_idx] >= 0) 
     {
@@ -171,7 +172,7 @@ int *calcoloPivot(VECTOR dataSet, int h, int N, int D)
 {
   printf("INIZIO CALCOLO PIVOT\n");
   int *pivot = (int *)_mm_malloc(h * sizeof(int), align); 
-  
+
   if (!pivot) return NULL; 
 
   /* README: il motivo per cui faccio N/h senza applicare l'istruzione di floorf
@@ -184,7 +185,7 @@ int *calcoloPivot(VECTOR dataSet, int h, int N, int D)
   int offset = N/h;
   for (int i = 0; i < h; i++)
     pivot[i] = i * offset;
-    
+
   printf("FINE CALCOLO PIVOT\n");
   return pivot;
 }
@@ -214,7 +215,7 @@ void preQuantizeDataset(params *input)
     VECTOR vm = &vMinus_all[i * D];
     quantizing(v, vm, vp, input, idx_buff);
   }
-  
+
   free(idx_buff);
 }
 
@@ -252,7 +253,7 @@ void preQuantizePivots(params *input)
     VECTOR pm = &pMinus[i * D];
     quantizing(p, pm, pp, input, idx_buff);
   }
-  
+
   free(idx_buff);
 }
 
@@ -319,16 +320,56 @@ void querying2(VECTOR query, params *input, VECTOR qPlus, VECTOR qMinus, VECTOR 
   // Solo ora calcoliamo la distanza reale per i vincitori
   for (int i = 0; i < k; i++)
   {
-     int id_vicino = (int)KNN[2 * i];
-     
-     if (id_vicino >= 0) {
-         VECTOR v = &input->DS[id_vicino * D];
-         // Sostituiamo la distanza approssimata con quella reale
-         KNN[2 * i + 1] = dEuclidea(query, v, D); 
-     }
+    int id_vicino = (int)KNN[2 * i];
+
+    if (id_vicino >= 0) {
+      VECTOR v = &input->DS[id_vicino * D];
+      // Sostituiamo la distanza approssimata con quella reale
+      KNN[2 * i + 1] = dEuclidea(query, v, D); 
+    }
   }
 }
 
+// Processa un blocco di dataset [start_N, end_N) per una specifica query
+void process_block_for_query(int start_N, int end_N, VECTOR query, params *input, VECTOR qPlus, VECTOR qMinus, VECTOR dQP, VECTOR KNN) 
+{
+  int D = input->D;
+  int h = input->h;
+  int k = input->k;
+
+
+  // Itera SOLO sul blocco corrente del dataset
+  for (int i = start_N; i < end_N; i++)
+  {
+    // A. Calcolo Lower Bound coi Pivot 
+    type best_lb = 0.0;
+
+    VECTOR current_index_row = &input->index[i * h];
+
+    for (int j = 0; j < h; j++)
+    {
+      type d_vi_pj = current_index_row[j]; 
+      type lb = ABS(d_vi_pj - dQP[j]);
+      if (lb > best_lb)
+        best_lb = lb;
+    }
+
+    type d_k_max = get_d_k_max(KNN, k);
+
+    if (best_lb >= d_k_max)
+      continue;
+
+    VECTOR vPlus = &vPlus_all[i * D];
+    VECTOR vMinus = &vMinus_all[i * D];
+    type d_q_v_approx = distanzaApprossimataPreQ(qPlus, qMinus, vPlus, vMinus, D);
+
+    // D. Inserimento
+    if (d_q_v_approx < d_k_max)
+    {
+      insert_into_knn(KNN, k, i, d_q_v_approx);
+    }
+  }
+}
 void fit(params* input){
   // Selezione dei pivot
   printf("INIZIO SELEZIONE PIVOT\n");
@@ -340,7 +381,7 @@ void fit(params* input){
     return;
   }
   printf("FINE SELEZIONE PIVOT\n");
-  
+
   // pre-quantizzazione dataset
   printf("INIZIO PRE-QUANTIZZAZIONE DATASET\n");
   preQuantizeDataset(input);
@@ -379,36 +420,88 @@ void fit(params* input){
 
 void predict(params* input){
   int nq = input->nq;
+  int N = input->N;
   int D = input->D;
   int k = input->k;
   int h = input->h;
 
   // Allocazione buffer temporanei FUORI dal ciclo per performance
   // Questo abilita la logica usata in querying2
-  VECTOR qPlus = malloc(D * sizeof(type));
-  VECTOR qMinus = malloc(D * sizeof(type));
-  VECTOR dQP = malloc(h * sizeof(type));
-  int *array_indici = malloc(D * sizeof(int));
+  VECTOR qPlusAll = malloc(D * nq * sizeof(type));
+  VECTOR qMinusAll = malloc(D * nq * sizeof(type));
+  VECTOR dQPAll = malloc(h * nq * sizeof(type));
 
-  VECTOR KNN = malloc(2*k * sizeof(type));
-  for(int i = 0; i < nq; i++) {
-    VECTOR query = &input->Q[i*D];
-    querying2(query, input, qPlus, qMinus, dQP, array_indici, KNN);
+  VECTOR KNNAll = malloc(2*k * nq *  sizeof(type));
 
-    for (int j = 0; j < k; j++) {
-      input->id_nn[i*k + j] = (int) KNN[2*j];      
-      input->dist_nn[i*k + j] = KNN[2*j + 1];     
+  int *idx_buff = malloc(D * sizeof(int)); 
+  for(int q = 0; q < nq; q++) {
+    VECTOR query = &input->Q[q * D];
+    VECTOR qPlus = &qPlusAll[q * D];
+    VECTOR qMinus = &qMinusAll[q * D];
+    VECTOR dQP = &dQPAll[q * h];
+    VECTOR currentKNN = &KNNAll[q * 2 * k];
+
+    // Init KNN a infinito
+    for (int i = 0; i < k; i++)
+    {
+      currentKNN[2 * i] = -1.0f;     // ID
+      currentKNN[2 * i + 1] = INFINITY; // Distanza
     }
 
+    // Quantizza query
+    quantizing(query, qMinus, qPlus, input, idx_buff);
+
+    // Precalcola distanze query-pivot
+    for (int j = 0; j < h; j++) {
+      VECTOR pPlusC = &pPlus[j * D]; 
+      VECTOR pMinusC = &pMinus[j * D];
+      dQP[j] = distanzaApprossimataPreQ(qPlus, qMinus, pPlusC, pMinusC, D);
+    }
+  } 
+  free(idx_buff);
+
+  // iteriamo i blocchi di dataset in ram e calcoliamo tutte le query
+  for (int idxStart = 0; idxStart < N; idxStart += BLOCK_SIZE) {
+    int idxEnd = idxStart + BLOCK_SIZE;
+    if(idxEnd > N) idxEnd = N;
+    for(int q = 0; q < nq; q++) {
+      VECTOR query = &input->Q[q * D]; // Non usata in approximate, ma serve per firma
+      VECTOR qPlus = &qPlusAll[q * D];
+      VECTOR qMinus = &qMinusAll[q * D];
+      VECTOR dQP = &dQPAll[q * h];
+      VECTOR current_KNN = &KNNAll[q * 2 * k];
+
+      // Aggiorna lo stato KNN della query q con i dati del blocco dataset corrente
+      process_block_for_query(idxStart, idxEnd, query, input, qPlus, qMinus, dQP, current_KNN);
+    }
   }
-  free(KNN); 
 
-  // Pulizia buffer temporanei
-  free(qPlus);
-  free(qMinus);
-  free(dQP);
-  free(array_indici);
+  for(int q = 0; q < nq; q++) {
+    VECTOR query = &input->Q[q * D];
+    VECTOR current_KNN = &KNNAll[q * 2 * k];
 
-  // Pulizia dati quantizzati globali
+    // Calcola distanze euclidee reali per i k candidati rimasti
+    for (int i = 0; i < k; i++)
+    {
+      int id_vicino = (int)current_KNN[2 * i];
+
+      if (id_vicino >= 0) {
+        VECTOR v = &input->DS[id_vicino * D];
+        current_KNN[2 * i + 1] = dEuclidea(query, v, D); 
+      }
+    }
+    // Scrittura output finale
+    for (int j = 0; j < k; j++) {
+      input->id_nn[q*k + j] = (int) current_KNN[2*j];      
+      input->dist_nn[q*k + j] = current_KNN[2*j + 1];     
+    }
+  }
+
+  // Pulizia
+  free(KNNAll);
+  free(qPlusAll);
+  free(qMinusAll);
+  free(dQPAll);
   freePreQuantization();
+
 }
