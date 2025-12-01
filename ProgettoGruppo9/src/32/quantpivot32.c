@@ -6,7 +6,7 @@
 #include <stdio.h>
 
 const int INDEXING_PROCEDURE_ERROR = -1;
-const int BLOCK_SIZE = 1024;
+const int BLOCK_SIZE = 512;
 
 // Variabili globali per i dati quantizzati
 VECTOR vPlus_all = NULL;
