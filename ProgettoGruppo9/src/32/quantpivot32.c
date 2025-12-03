@@ -15,6 +15,7 @@ VECTOR pPlus = NULL;
 VECTOR pMinus = NULL;
 
 /* Ma che vuol dire che in C non c'è l'overloading della funzioni... -> https://en.cppreference.com/w/c/language/generic.html*/
+extern float distanzaPreQ(float *vPlus, float *vMinus, float *wPlus, float *wMinus, int D);
 extern float prodScalaref(float *v, float *w, int D);
 extern double prodScalared(double *v, double *w, int D);
 #define prodScalare(v,w,D) _Generic((v), float*: prodScalaref, double*:prodScalared)(v,w,D) 
@@ -79,11 +80,7 @@ type get_d_k_max(VECTOR KNN, int k)
 // Calcolo distanza approssimata (Eq. 2 del documento)
 type distanzaApprossimataPreQ(VECTOR vPlus, VECTOR vMinus, VECTOR wPlus, VECTOR wMinus, int D)
 {
-  type posPos = prodScalare(vPlus, wPlus, D);
-  type negNeg = prodScalare(vMinus, wMinus, D);
-  type posNeg = prodScalare(vPlus, wMinus, D);
-  type negPos = prodScalare(vMinus, wPlus, D);
-  return posPos + negNeg - posNeg - negPos;
+  return distanzaPreQ(vPlus, vMinus, wPlus, wMinus, D);
 }
 
 // Costruzione indice (distanze dataset <-> pivot)
