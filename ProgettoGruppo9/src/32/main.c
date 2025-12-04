@@ -113,34 +113,32 @@ int main(int argc, char **argv)
   N = input->N;
   D = input->D;
   printf("N = %d, D = %d, h = %d, x = %d, k = %d\n", N,D,h,x,k);
-  
+
   clock_t t;
-  double elapsed;
+  double time;
 
-  t = clock();
+  t = omp_get_wtime();
+  // =========================================================
   fit(input);
-  t = clock() - t;
-  elapsed = ((double)t) / CLOCKS_PER_SEC;
-  printf("FIT time = %.5f secs\n", elapsed);
+  // =========================================================
+  t = omp_get_wtime() - t;
 
   if(!input->silent)
-    printf("FIT time = %.5lf secs\n", elapsed);
+    printf("FIT time = %.5f secs\n", (double)t);
   else
-    printf("%.3lf\n", elapsed);
+    printf("%.3f\n", (double)t);
 
-  elapsed = 0;
-
-  t = clock();
+  t = omp_get_wtime();
+  // =========================================================
   predict(input);
-  t = clock() - t;
-  elapsed = ((double)t) / CLOCKS_PER_SEC;
-  printf("FIT time = %.5f secs\n", elapsed);
-
+  // =========================================================
+  t = omp_get_wtime() - t;
 
   if(!input->silent)
-    printf("PREDICT time = %.5lf secs\n", elapsed);
+    printf("PREDICT time = %.5f secs\n", (double)t);
   else
-    printf("%.3lf\n", elapsed);
+    printf("%.3f\n", (double)t);
+
 
 
   printf("\n=== CONFRONTO PRIME DISTANZE ===\n");
