@@ -1,51 +1,55 @@
+global popCountAnd
+
 section .text
-global andBitABit
 
-; double prodScalare(double *arr1, double *arr2, int n)
-andBitABit:
-    push    rbp
-    mov     rbp, rsp
+; int popCountAnd(void *v, void *w, int numeroBlocchi32)
+; RDI = puntatore v
+; RSI = puntatore w
+; RDX = numeroBlocchi32 (quanti uint32_t ci sono)
+; Ritorna (RAX) il numero totale di bit a 1 nell'intersezione
 
-    ; Input: RDI=arr1, RSI=arr2, EDX=n
+popCountAnd:
+    xor rax, rax            ; Azzera accumulatore risultato
+    test rdx, rdx           ; Controllo se size == 0
+    jz .fine
 
-    movsxd  rcx, edx        ; RCX = n (esteso a 64 bit)
-    shl     rcx, 3     
-    mov     rdx, rcx    
-    shr     rdx, 4       
-    shl     rdx, 4          
-    xorpd   xmm0, xmm0     
-    xor     rax, rax        ; Indice i = 0
+    ; Calcoliamo quanti cicli da 64 bit possiamo fare
+    ; RDX contiene il numero di blocchi da 32 bit.
+    ; Dividiamo per 2 per lavorare a 64 bit.
+    mov rcx, rdx
+    shr rcx, 1              ; rcx = rdx / 2
+    
+    xor r8, r8              ; Indice loop a 64 bit
 
-; --- Ciclo Vettoriale (SSE) ---
-ciclo_vett:
-    cmp     rax, rdx        
-    jge     fine_vett       ; Se abbiamo finito i blocchi da 4, esci
+.loop_64:
+    cmp r8, rcx
+    jge .handle_remainder
 
-    movupd  xmm1, [rdi + rax]
-    movupd  xmm2, [rsi + rax]
-    mulpd   xmm1, xmm2
-    addpd   xmm0, xmm1
+    ; Carica 64 bit (2 blocchi da 32 insieme)
+    mov r9, [rdi + r8*8]
+    mov r10, [rsi + r8*8]
 
-    add     rax, 16
-    jmp     ciclo_vett
+    and r9, r10             ; AND bit a bit
 
-fine_vett:
-    haddpd  xmm0, xmm0
+    popcnt r9, r9           ; Conta i bit a 1 (istruzione SSE4.2)
+    add rax, r9             ; Aggiungi al totale
 
-; --- Ciclo Scalare (Resto) ---
-ciclo_scalare:
-    cmp     rax, rcx        ; Confronta con il LIMITE TOTALE
-    jge     fine
+    inc r8
+    jmp .loop_64
 
-    movsd   xmm1, [rdi + rax]
-    movsd   xmm2, [rsi + rax]
-    mulsd   xmm1, xmm2
-    addsd   xmm0, xmm1      ; Aggiunge al totale
+.handle_remainder:
+    ; Gestione dell'eventuale blocco da 32 bit rimasto dispari
+    test rdx, 1             ; Se il numero di blocchi 32 era dispari
+    jz .fine
 
-    add     rax, 8
-    jmp     ciclo_scalare
+    ; Carica gli ultimi 32 bit
+    ; Nota: l'offset è r8*8 perché r8 contava i blocchi da 64 bit (8 byte)
+    mov r9d, [rdi + r8*8]   ; mov r9d carica solo 32 bit
+    mov r10d, [rsi + r8*8]
+    
+    and r9d, r10d
+    popcnt r9d, r9d
+    add rax, r9
 
-fine:
-    pop     rbp
+.fine:
     ret
-

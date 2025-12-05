@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <string.h>
 #include <xmmintrin.h>
 #include <omp.h>
 #include "common.h"
@@ -19,7 +20,7 @@ __uint32_t* pMinus = NULL;
 
 
 /* Ma che vuol dire che in C non c'è l'overloading della funzioni... -> https://en.cppreference.com/w/c/language/generic.html*/
-extern __uint32_t andBitABit(__uint32_t *v, __uint32_t * w, int numeroBlocchiBitPacking);
+extern int popCountAnd(__uint32_t *v, __uint32_t *w, int numeroBlocchi);
 extern float prodScalaref(float *v, float *w, int D);
 extern double prodScalared(double *v, double *w, int D);
 #define prodScalare(v,w,D) _Generic((v), float*: prodScalaref, double*:prodScalared)(v,w,D) 
@@ -84,12 +85,19 @@ type get_d_k_max(VECTOR KNN, int k)
 // Calcolo distanza approssimata (Eq. 2 del documento)
 type distanzaApprossimataPreQ(__uint32_t* vPlus, __uint32_t* vMinus, __uint32_t* wPlus, __uint32_t* wMinus)
 {
-  type posPos = andBitABit(vPlus, wPlus, numeroBlocchiBitPacking);
-  type negNeg = andBitABit(vMinus, wMinus, numeroBlocchiBitPacking);
-  type posNeg = andBitABit(vPlus, wMinus, numeroBlocchiBitPacking);
-  type negPos = andBitABit(vMinus, wPlus, numeroBlocchiBitPacking);
+  int posPosVal = popCountAnd(vPlus, wPlus, numeroBlocchiBitPacking);
+    int negNegVal = popCountAnd(vMinus, wMinus, numeroBlocchiBitPacking);
+    int posNegVal = popCountAnd(vPlus, wMinus, numeroBlocchiBitPacking);
+    int negPosVal = popCountAnd(vMinus, wPlus, numeroBlocchiBitPacking);
   
-  return posPos + negNeg - posNeg - negPos;
+    // Conversione sicura da int a float/double (type)
+    type posPos = (type)posPosVal;
+    type negNeg = (type)negNegVal;
+    type posNeg = (type)posNegVal;
+    type negPos = (type)negPosVal;
+  
+    // Formula (2) [cite: 57]
+    return posPos + negNeg - posNeg - negPos;
 }
 
 // Costruzione indice (distanze dataset <-> pivot)
