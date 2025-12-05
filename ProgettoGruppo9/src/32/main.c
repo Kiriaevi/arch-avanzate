@@ -6,10 +6,10 @@
 #include "common.h"
 #include "quantpivot32.c"
 
-//#define datasetFileName "dataset_2000x256_32.ds2"
-//#define queryFileName "query_2000x256_32.ds2"
-#define datasetFileName "generated_dataset.ds2"
-#define queryFileName "generated_queries.ds2"
+#define datasetFileName "dataset_2000x256_32.ds2"
+#define queryFileName "query_2000x256_32.ds2"
+//#define datasetFileName "generated_dataset.ds2"
+//#define queryFileName "generated_queries.ds2"
 
 static int N; // Righe dataset
 static int D;  // Colonne dataset
@@ -115,12 +115,12 @@ int main(int argc, char **argv)
   printf("N = %d, D = %d, h = %d, x = %d, k = %d\n", N,D,h,x,k);
   
   clock_t t;
-  double elapsed;
+  float elapsed;
 
   t = clock();
   fit(input);
   t = clock() - t;
-  elapsed = ((double)t) / CLOCKS_PER_SEC;
+  elapsed = ((float)t) / CLOCKS_PER_SEC;
   printf("FIT time = %.5f secs\n", elapsed);
 
   if(!input->silent)
@@ -133,8 +133,8 @@ int main(int argc, char **argv)
   t = clock();
   predict(input);
   t = clock() - t;
-  elapsed = ((double)t) / CLOCKS_PER_SEC;
-  printf("FIT time = %.5f secs\n", elapsed);
+  elapsed = ((float)t) / CLOCKS_PER_SEC;
+  printf("PREDICT time = %.5f secs\n", elapsed);
 
 
   if(!input->silent)
