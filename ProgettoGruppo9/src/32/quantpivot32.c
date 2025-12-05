@@ -19,6 +19,7 @@ __uint64_t* pMinus = NULL;
 
 
 /* Ma che vuol dire che in C non c'è l'overloading della funzioni... -> https://en.cppreference.com/w/c/language/generic.html*/
+extern __uint64_t andBitABit(__uint64_t *v, __uint64_t * w, int numeroBlocchiBitPacking);
 extern float prodScalaref(float *v, float *w, int D);
 extern double prodScalared(double *v, double *w, int D);
 #define prodScalare(v,w,D) _Generic((v), float*: prodScalaref, double*:prodScalared)(v,w,D) 
