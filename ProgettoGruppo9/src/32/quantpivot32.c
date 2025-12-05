@@ -12,10 +12,10 @@ int numeroBlocchiBitPacking = 0;
 const int dimensioneSottovettoreBitPacking = 64;
 
 // Variabili globali per i dati quantizzati
-VECTOR vPlus_all = NULL;
-VECTOR vMinus_all = NULL;
-VECTOR pPlus = NULL;
-VECTOR pMinus = NULL;
+__uint64_t* vPlus_all = NULL;
+__uint64_t* vMinus_all = NULL;
+__uint64_t* pPlus = NULL;
+__uint64_t* pMinus = NULL;
 
 
 /* Ma che vuol dire che in C non c'è l'overloading della funzioni... -> https://en.cppreference.com/w/c/language/generic.html*/
@@ -217,8 +217,8 @@ void preQuantizeDataset(params *input)
 {
   int N = input->N;
   int D = input->D;
-  vPlus_all = malloc((size_t)N * numeroBlocchiBitPacking * sizeof(__uint64_t));
-  vMinus_all = malloc((size_t)N * numeroBlocchiBitPacking * sizeof(__uint64_t));
+  vPlus_all = calloc((size_t)N * numeroBlocchiBitPacking, sizeof(__uint64_t));
+  vMinus_all = calloc((size_t)N * numeroBlocchiBitPacking, sizeof(__uint64_t));
 
   if (!vPlus_all || !vMinus_all) {
     fprintf(stderr, "Errore allocazione vPlus_all/vMinus_all\n");
@@ -251,8 +251,8 @@ void preQuantizePivots(params *input)
   int D = input->D;
   int h = input->h;
 
-  pPlus  = malloc((size_t)h * D * sizeof(type));
-  pMinus = malloc((size_t)h * D * sizeof(type));
+  pPlus  = calloc((size_t)h * numeroBlocchiBitPacking, sizeof(__uint64_t ));
+  pMinus = calloc((size_t)h * numeroBlocchiBitPacking, sizeof(__uint64_t ));
 
   if (!pPlus || !pMinus) {
     fprintf(stderr, "Errore allocazione pPlus/pMinus\n");
@@ -271,9 +271,9 @@ void preQuantizePivots(params *input)
     int pivot_idx = input->P[i];
     if (pivot_idx < 0 || pivot_idx >= input->N) {
       // Gestione errore pivot fuori range
-      VECTOR pp = &pPlus[i * numeroBlocchiBitPacking];
-      VECTOR pm = &pMinus[i * numeroBlocchiBitPacking];
-      for (int t = 0; t < D; t++) { pp[t]=0.0; pm[t]=0.0; }
+      __uint64_t* pp = &pPlus[i * numeroBlocchiBitPacking];
+      __uint64_t* pm = &pMinus[i * numeroBlocchiBitPacking];
+      for (int t = 0; t < numeroBlocchiBitPacking; t++) { pp[t]=0ULL; pm[t]=0ULL; }
       continue;
     }
     VECTOR p = &input->DS[pivot_idx * D];
@@ -288,7 +288,7 @@ void preQuantizePivots(params *input)
 }
 
 // Processa un blocco di dataset [start_N, end_N) per una specifica query
-void process_block_for_query(int start_N, int end_N, VECTOR query, params *input, VECTOR qPlus, VECTOR qMinus, VECTOR dQP, VECTOR KNN) 
+void process_block_for_query(int start_N, int end_N, VECTOR query, params *input, __uint64_t* qPlus, __uint64_t* qMinus, VECTOR dQP, VECTOR KNN) 
 {
   int D = input->D;
   int h = input->h;
@@ -415,8 +415,8 @@ void predict(params* input){
 
     // Precalcola distanze query-pivot
     for (int j = 0; j < h; j++) {
-      VECTOR pPlusC = &pPlus[j * D]; 
-      VECTOR pMinusC = &pMinus[j * D];
+      __uint64_t *pPlusC = &pPlus[j * numeroBlocchiBitPacking]; 
+      __uint64_t *pMinusC = &pMinus[j * numeroBlocchiBitPacking];
       dQP[j] = distanzaApprossimataPreQ(qPlus, qMinus, pPlusC, pMinusC);
     }
   } 
@@ -430,9 +430,9 @@ void predict(params* input){
     int idxEnd = idxStart + BLOCK_SIZE;
     if(idxEnd > N) idxEnd = N;
     for(int q = 0; q < nq; q++) {
-      VECTOR query = &input->Q[q * D]; // Non usata in approximate, ma serve per firma
-      VECTOR qPlus = &qPlusAll[q * D];
-      VECTOR qMinus = &qMinusAll[q * D];
+      VECTOR query = &input->Q[q * D]; 
+      __uint64_t *qPlus = &qPlusAll[q * numeroBlocchiBitPacking];
+      __uint64_t *qMinus = &qMinusAll[q * numeroBlocchiBitPacking];
       VECTOR dQP = &dQPAll[q * h];
       VECTOR current_KNN = &KNNAll[q * 2 * k];
 
