@@ -461,7 +461,6 @@ void predict(params* input){
   free(idx_buff);
 
   // iteriamo i blocchi di dataset in ram e calcoliamo tutte le query
-#pragma omp parallel for
   for (int idxStart = 0; idxStart < N; idxStart += BLOCK_SIZE) {
     int idxEnd = idxStart + BLOCK_SIZE;
     if(idxEnd > N) idxEnd = N;
