@@ -5,22 +5,21 @@
 #include "common.h"
 #include <math.h>
 #include <stdio.h>
+#include <stdint.h>
 
 const int INDEXING_PROCEDURE_ERROR = -1;
 const int BLOCK_SIZE = 512;
 
-int numeroBlocchiBitPacking = 0;
-const int dimensioneSottovettoreBitPacking = 32; // 32 bit per blocco (uint32_t)
-
 // Variabili globali per i dati quantizzati
-__uint32_t* vPlus_all = NULL;
-__uint32_t* vMinus_all = NULL;
-__uint32_t* pPlus = NULL;
-__uint32_t* pMinus = NULL;
+uint32_t* vPlus_all = NULL;
+uint32_t* vMinus_all = NULL;
+uint32_t* pPlus = NULL;
+uint32_t* pMinus = NULL;
 
+int num_blocchi_global = 0;
 
 /* Ma che vuol dire che in C non c'è l'overloading della funzioni... -> https://en.cppreference.com/w/c/language/generic.html*/
-extern int popCountAnd(__uint32_t *v, __uint32_t *w, int numeroBlocchi);
+extern int andBitABit(int v, int w);
 extern float prodScalaref(float *v, float *w, int D);
 extern double prodScalared(double *v, double *w, int D);
 #define prodScalare(v,w,D) _Generic((v), float*: prodScalaref, double*:prodScalared)(v,w,D) 
@@ -30,6 +29,17 @@ extern double dEuclidead(double *v, double *w, int D);
 
 /*GENERALIZZO IL PROGRAMMA PER FUNZIONARE SIA CON DOUBLE CHE CON FLOAT*/
 #define ABS(x) _Generic((x), float: fabsf, double: fabs)(x)
+
+int ottieniNumBitUno(uint32_t n) {
+    int count = 0;
+    while (n > 0) {
+        if (n & 1) { 
+            count++;
+        }
+        n >>= 1; //esempio: 1101 >> 1 = 0110
+    }
+    return count;
+}
 
 // Funzione di pulizia (chiamata alla fine di predict)
 void freePreQuantization()
@@ -83,21 +93,30 @@ type get_d_k_max(VECTOR KNN, int k)
 }
 
 // Calcolo distanza approssimata (Eq. 2 del documento)
-type distanzaApprossimataPreQ(__uint32_t* vPlus, __uint32_t* vMinus, __uint32_t* wPlus, __uint32_t* wMinus)
+type distanzaApprossimataPreQ(uint32_t* vPlus, uint32_t* vMinus, uint32_t* wPlus, uint32_t* wMinus, int D)
 {
-  int posPosVal = popCountAnd(vPlus, wPlus, numeroBlocchiBitPacking);
-    int negNegVal = popCountAnd(vMinus, wMinus, numeroBlocchiBitPacking);
-    int posNegVal = popCountAnd(vPlus, wMinus, numeroBlocchiBitPacking);
-    int negPosVal = popCountAnd(vMinus, wPlus, numeroBlocchiBitPacking);
-  
-    // Conversione sicura da int a float/double (type)
-    type posPos = (type)posPosVal;
-    type negNeg = (type)negNegVal;
-    type posNeg = (type)posNegVal;
-    type negPos = (type)negPosVal;
-  
-    // Formula (2) [cite: 57]
-    return posPos + negNeg - posNeg - negPos;
+    int num_blocchi = (D + 31) / 32;
+    int totale_bit_1 = 0;
+
+    // Iteriamo su ogni blocco di interi
+    for(int b = 0; b < num_blocchi; b++) {
+        
+        // 1. Chiamata Assembly per il blocco corrente
+        // Passiamo i singoli interi del bucket 'b'
+        int posPosVal = andBitABit(vPlus[b], wPlus[b]);
+        int negNegVal = andBitABit(vMinus[b], wMinus[b]);
+        int posNegVal = andBitABit(vPlus[b], wMinus[b]);
+        int negPosVal = andBitABit(vMinus[b], wPlus[b]);
+
+        // 2. Conteggio bit e accumulo nel totale
+        // Sommiamo (posPos + negNeg - posNeg - negPos) per questo blocco
+        totale_bit_1 += ottieniNumBitUno(posPosVal);
+        totale_bit_1 += ottieniNumBitUno(negNegVal);
+        totale_bit_1 -= ottieniNumBitUno(posNegVal);
+        totale_bit_1 -= ottieniNumBitUno(negPosVal);
+    }
+
+    return (type)totale_bit_1;
 }
 
 // Costruzione indice (distanze dataset <-> pivot)
@@ -105,39 +124,41 @@ VECTOR indexing(params* input)
 {
   int N = input->N;
   int h = input->h;
+  int D = input->D;
 
-  VECTOR output = _mm_malloc(N * h * sizeof(type), align); 
+  VECTOR output = _mm_malloc(N * h * sizeof(type), 32); 
 
   if (output == NULL) return NULL;
 
   for (int r = 0; r < N; r++)
   {
-    __uint32_t* vPlus = &vPlus_all[r * numeroBlocchiBitPacking]; 
-    __uint32_t* vMinus = &vMinus_all[r * numeroBlocchiBitPacking];
+    uint32_t* vPlus = &vPlus_all[r * num_blocchi_global]; 
+    uint32_t* vMinus = &vMinus_all[r * num_blocchi_global];
     for (int c = 0; c < h; c++)
     {
-      __uint32_t* pPlusC = &pPlus[c * numeroBlocchiBitPacking];
-      __uint32_t* pMinusC = &pMinus[c * numeroBlocchiBitPacking];
-      output[r * h + c] = distanzaApprossimataPreQ(vPlus, vMinus, pPlusC, pMinusC);
+      uint32_t* pPlusC = &pPlus[c * num_blocchi_global];
+      uint32_t* pMinusC = &pMinus[c * num_blocchi_global];
+      output[r * h + c] = distanzaApprossimataPreQ(vPlus, vMinus, pPlusC, pMinusC, D);
     }
   }
   return output;
 }
 
 // Funzione di quantizzazione (versione HEAD)
-void quantizing(VECTOR v, __uint32_t* vMinus, __uint32_t* vPlus, params* input, int *array_indici, VECTOR vMinus_Cuscinetto, VECTOR vPlus_Cuscinetto)
+void quantizing(VECTOR v, uint32_t *vMinus, uint32_t *vPlus, params* input, int *array_indici)
 {
   int D = input->D;
   int x = input->x;
 
-  // N.B. array_indici viene passato dall'esterno per evitare allocazioni ripetute
+  // 1. Reset
+  for(int b = 0; b < num_blocchi_global; b++) {
+      vPlus[b] = 0;
+      vMinus[b] = 0;
+  }
 
-  // 1. Reset e Inizializzazione
   for (int k = 0; k < D; k++)
   {
     array_indici[k] = k;
-    vPlus_Cuscinetto[k] = 0.0;
-    vMinus_Cuscinetto[k] = 0.0;
   }
 
   // 2. Cerco gli X elementi con valore assoluto massimo (Partial Selection Sort)
@@ -167,34 +188,19 @@ void quantizing(VECTOR v, __uint32_t* vMinus, __uint32_t* vPlus, params* input, 
   for (int i = 0; i < x; i++)
   {
     int original_idx = array_indici[i]; 
+    
+    int bucket = original_idx / 32;
+    int esponente_locale = original_idx % 32;
 
-    // Se v >= 0 -> vPlus=1, altrimenti vMinus=1
-    if (v[original_idx] >= 0) 
-    {
-      vPlus_Cuscinetto[original_idx] = 1.0;
-    }
-    else 
-    {
-      vMinus_Cuscinetto[original_idx] = 1.0;
+    uint32_t valore_posizionale = (uint32_t)pow(2, esponente_locale);
+
+    if (v[original_idx] >= 0) {
+      vPlus[bucket] += valore_posizionale; 
+    } else {
+      vMinus[bucket] += valore_posizionale;
     }
   }
 
-for (int i = 0; i < numeroBlocchiBitPacking; i++)
-{
-    for (int j = 0; j < dimensioneSottovettoreBitPacking; j++)  // ogni blocco ha max 64 bit
-    {
-        int idx = i * dimensioneSottovettoreBitPacking + j;
-        if (idx >= D) break;  // evita di andare oltre D
-
-        if (vPlus_Cuscinetto[idx] == 1.0)
-            vPlus[i] |= 1ULL << j;   // imposta il bit j del blocco i
-
-        if (vMinus_Cuscinetto[idx] == 1.0)
-            vMinus[i] |= 1ULL << j;  // imposta il bit j del blocco i
-    }
-}
-
-  
 }
 
 // Selezione Pivot
@@ -202,7 +208,7 @@ for (int i = 0; i < numeroBlocchiBitPacking; i++)
 int *calcoloPivot(VECTOR dataSet, int h, int N, int D)
 {
   printf("INIZIO CALCOLO PIVOT\n");
-  int *pivot = (int *)_mm_malloc(h * sizeof(int), align); 
+  int *pivot = (int *)_mm_malloc(h * sizeof(int), 32); 
 
   if (!pivot) return NULL; 
 
@@ -226,8 +232,8 @@ void preQuantizeDataset(params *input)
 {
   int N = input->N;
   int D = input->D;
-  vPlus_all = calloc((size_t)N * numeroBlocchiBitPacking, sizeof(__uint32_t));
-  vMinus_all = calloc((size_t)N * numeroBlocchiBitPacking, sizeof(__uint32_t));
+  vPlus_all = calloc((size_t)N * num_blocchi_global, sizeof(uint32_t));
+  vMinus_all = calloc((size_t)N * num_blocchi_global, sizeof(uint32_t));
 
   if (!vPlus_all || !vMinus_all) {
     fprintf(stderr, "Errore allocazione vPlus_all/vMinus_all\n");
@@ -238,20 +244,16 @@ void preQuantizeDataset(params *input)
   }
 
   int *idx_buff = malloc(D * sizeof(int));
-  VECTOR vPlus_Cuscinetto = calloc(D, sizeof(type));
-  VECTOR vMinus_Cuscinetto = calloc(D, sizeof(type));
 
   for (int i = 0; i < N; i++)
   {
     VECTOR v = &input->DS[i * D]; // Vettore corrente del dataset
-    __uint32_t* vp = &vPlus_all[i * numeroBlocchiBitPacking]; // Vettore vPlus da quantizzare, preso dalla matrice globale
-    __uint32_t* vm = &vMinus_all[i * numeroBlocchiBitPacking]; // Vettore vMinus da quantizzare, preso dalla matrice globale
-    quantizing(v, vm, vp, input, idx_buff, vMinus_Cuscinetto, vPlus_Cuscinetto);
+    uint32_t* vp = &vPlus_all[i * num_blocchi_global]; // Vettore vPlus da quantizzare, preso dalla matrice globale
+    uint32_t* vm = &vMinus_all[i * num_blocchi_global]; // Vettore vMinus da quantizzare, preso dalla matrice globale
+    quantizing(v, vm, vp, input, idx_buff);
   }
 
   free(idx_buff);
-  free(vPlus_Cuscinetto);
-  free(vMinus_Cuscinetto);
 }
 
 // Pre-quantizzazione dei Pivot
@@ -259,9 +261,6 @@ void preQuantizePivots(params *input)
 {
   int D = input->D;
   int h = input->h;
-
-  pPlus  = calloc((size_t)h * numeroBlocchiBitPacking, sizeof(__uint32_t ));
-  pMinus = calloc((size_t)h * numeroBlocchiBitPacking, sizeof(__uint32_t ));
 
   if (!pPlus || !pMinus) {
     fprintf(stderr, "Errore allocazione pPlus/pMinus\n");
@@ -272,37 +271,32 @@ void preQuantizePivots(params *input)
   }
 
   int *idx_buff = malloc(D * sizeof(int));
-  VECTOR vPlus_Cuscinetto = calloc(D, sizeof(type));
-  VECTOR vMinus_Cuscinetto = calloc(D, sizeof(type));
 
   for (int i = 0; i < h; i++)
   {
     int pivot_idx = input->P[i];
+    
+    uint32_t* pP = &pPlus[i * num_blocchi_global];
+    uint32_t* pM = &pMinus[i * num_blocchi_global];
+
     if (pivot_idx < 0 || pivot_idx >= input->N) {
       // Gestione errore pivot fuori range
-      __uint32_t* pp = &pPlus[i * numeroBlocchiBitPacking];
-      __uint32_t* pm = &pMinus[i * numeroBlocchiBitPacking];
-      for (int t = 0; t < numeroBlocchiBitPacking; t++) { pp[t]=0ULL; pm[t]=0ULL; }
+      for(int b=0; b < num_blocchi_global; b++) { pP[b]=0; pM[b]=0; }
       continue;
     }
     VECTOR p = &input->DS[pivot_idx * D];
-    __uint32_t* pp = &pPlus[i * numeroBlocchiBitPacking];
-    __uint32_t* pm = &pMinus[i * numeroBlocchiBitPacking];
-    quantizing(p, pm, pp, input, idx_buff, vMinus_Cuscinetto, vPlus_Cuscinetto);
+    
+    quantizing(p, pM, pP, input, idx_buff);
   }
-
   free(idx_buff);
-  free(vPlus_Cuscinetto);
-  free(vMinus_Cuscinetto);
 }
 
 // Processa un blocco di dataset [start_N, end_N) per una specifica query
-void process_block_for_query(int start_N, int end_N, VECTOR query, params *input, __uint32_t* qPlus, __uint32_t* qMinus, VECTOR dQP, VECTOR KNN) 
+void process_block_for_query(int start_N, int end_N, VECTOR query, params *input, uint32_t* qPlus, uint32_t* qMinus, VECTOR dQP, VECTOR KNN) 
 {
   int D = input->D;
   int h = input->h;
   int k = input->k;
-
 
   // Itera SOLO sul blocco corrente del dataset
   for (int i = start_N; i < end_N; i++)
@@ -325,9 +319,10 @@ void process_block_for_query(int start_N, int end_N, VECTOR query, params *input
     if (best_lb >= d_k_max)
       continue;
 
-    __uint32_t* vPlus = &vPlus_all[i * numeroBlocchiBitPacking];
-    __uint32_t* vMinus = &vMinus_all[i * numeroBlocchiBitPacking];
-    type d_q_v_approx = distanzaApprossimataPreQ(qPlus, qMinus, vPlus, vMinus);
+    uint32_t* vPlus = &vPlus_all[i * num_blocchi_global];
+    uint32_t* vMinus = &vMinus_all[i * num_blocchi_global];
+    
+    type d_q_v_approx = distanzaApprossimataPreQ(vPlus, vMinus, qPlus, qMinus, D);
 
     // D. Inserimento
     if (d_q_v_approx < d_k_max)
@@ -336,9 +331,10 @@ void process_block_for_query(int start_N, int end_N, VECTOR query, params *input
     }
   }
 }
+
 void fit(params* input){
   
-  numeroBlocchiBitPacking = ((input->D + dimensioneSottovettoreBitPacking-1) / dimensioneSottovettoreBitPacking); // arrotondamento a multiplo di 32
+  num_blocchi_global = (input->D + 31) / 32;
 
   // Selezione dei pivot
   printf("INIZIO SELEZIONE PIVOT\n");
@@ -362,6 +358,9 @@ void fit(params* input){
     return;
   }
   printf("FINE PRE-QUANTIZZAZIONE DATASET\n");
+
+  pPlus = calloc(input->h * num_blocchi_global, sizeof(uint32_t));
+  pMinus = calloc(input->h * num_blocchi_global, sizeof(uint32_t));
 
   // pre-quantizzazione pivot
   printf("INIZIO PRE-QUANTIZZAZIONE PIVOT\n");
@@ -396,19 +395,17 @@ void predict(params* input){
 
   // Allocazione buffer temporanei FUORI dal ciclo per performance
   // Questo abilita la logica usata in querying2
-  __uint32_t* qPlusAll = malloc(numeroBlocchiBitPacking * nq * sizeof(__uint32_t));
-  __uint32_t* qMinusAll = malloc(numeroBlocchiBitPacking * nq * sizeof(__uint32_t));
+  uint32_t* qPlusAll = malloc(nq * num_blocchi_global * sizeof(uint32_t));
+  uint32_t* qMinusAll = malloc(nq * num_blocchi_global * sizeof(uint32_t));
   VECTOR dQPAll = malloc(h * nq * sizeof(type));
 
-  VECTOR KNNAll = malloc(2*k * nq *  sizeof(type));
+  VECTOR KNNAll = malloc(2*k * nq * sizeof(type));
 
   int *idx_buff = malloc(D * sizeof(int)); 
-  VECTOR qPlus_Cuscinetto = calloc(D, sizeof(type));
-  VECTOR qMinus_Cuscinetto = calloc(D, sizeof(type));
   for(int q = 0; q < nq; q++) {
     VECTOR query = &input->Q[q * D];
-    __uint32_t* qPlus = &qPlusAll[q * numeroBlocchiBitPacking];
-    __uint32_t* qMinus = &qMinusAll[q * numeroBlocchiBitPacking];
+    uint32_t* qPlus = &qPlusAll[q * num_blocchi_global];
+    uint32_t* qMinus = &qMinusAll[q * num_blocchi_global];
     VECTOR dQP = &dQPAll[q * h];
     VECTOR currentKNN = &KNNAll[q * 2 * k];
 
@@ -420,28 +417,25 @@ void predict(params* input){
     }
 
     // Quantizza query
-    quantizing(query, qMinus, qPlus, input, idx_buff, qMinus_Cuscinetto, qPlus_Cuscinetto);
+    quantizing(query, qMinus, qPlus, input, idx_buff);
 
     // Precalcola distanze query-pivot
     for (int j = 0; j < h; j++) {
-      __uint32_t *pPlusC = &pPlus[j * numeroBlocchiBitPacking]; 
-      __uint32_t *pMinusC = &pMinus[j * numeroBlocchiBitPacking];
-      dQP[j] = distanzaApprossimataPreQ(qPlus, qMinus, pPlusC, pMinusC);
+      uint32_t* pPlusC = &pPlus[j * num_blocchi_global]; 
+      uint32_t* pMinusC = &pMinus[j * num_blocchi_global];
+      dQP[j] = distanzaApprossimataPreQ(qPlus, qMinus, pPlusC, pMinusC, D);
     }
   } 
   free(idx_buff);
-  free(qPlus_Cuscinetto);
-  free(qMinus_Cuscinetto);
 
   // iteriamo i blocchi di dataset in ram e calcoliamo tutte le query
-#pragma omp parallel for
   for (int idxStart = 0; idxStart < N; idxStart += BLOCK_SIZE) {
     int idxEnd = idxStart + BLOCK_SIZE;
     if(idxEnd > N) idxEnd = N;
     for(int q = 0; q < nq; q++) {
       VECTOR query = &input->Q[q * D]; 
-      __uint32_t *qPlus = &qPlusAll[q * numeroBlocchiBitPacking];
-      __uint32_t *qMinus = &qMinusAll[q * numeroBlocchiBitPacking];
+      uint32_t* qPlus = &qPlusAll[q * num_blocchi_global];
+      uint32_t* qMinus = &qMinusAll[q * num_blocchi_global];
       VECTOR dQP = &dQPAll[q * h];
       VECTOR current_KNN = &KNNAll[q * 2 * k];
 
