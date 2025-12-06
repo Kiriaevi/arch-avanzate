@@ -9,6 +9,7 @@
 
 const int INDEXING_PROCEDURE_ERROR = -1;
 const int BLOCK_SIZE = 512;
+const int BATCH_QUERY = 32;
 
 // Variabili globali per i dati quantizzati
 uint32_t* vPlus_all = NULL;
@@ -31,14 +32,14 @@ extern double dEuclidead(double *v, double *w, int D);
 #define ABS(x) _Generic((x), float: fabsf, double: fabs)(x)
 
 int ottieniNumBitUno(uint32_t n) {
-    int count = 0;
-    while (n > 0) {
-        if (n & 1) { 
-            count++;
-        }
-        n >>= 1; //esempio: 1101 >> 1 = 0110
+  int count = 0;
+  while (n > 0) {
+    if (n & 1) { 
+      count++;
     }
-    return count;
+    n >>= 1; //esempio: 1101 >> 1 = 0110
+  }
+  return count;
 }
 
 // Funzione di pulizia (chiamata alla fine di predict)
@@ -78,7 +79,7 @@ void insert_into_knn(VECTOR KNN, int k, int id, type distance)
 }
 
 // Recupera la distanza massima attuale nella lista K-NN (il raggio di ricerca)
-type get_d_k_max(VECTOR KNN, int k)
+static inline type get_d_k_max(VECTOR KNN, int k)
 {
   type max_distance = -1.0f;
   for (int i = 0; i < k; i++)
@@ -95,28 +96,28 @@ type get_d_k_max(VECTOR KNN, int k)
 // Calcolo distanza approssimata (Eq. 2 del documento)
 type distanzaApprossimataPreQ(uint32_t* vPlus, uint32_t* vMinus, uint32_t* wPlus, uint32_t* wMinus, int D)
 {
-    int num_blocchi = (D + 31) / 32;
-    int totale_bit_1 = 0;
+  int num_blocchi = (D + 31) / 32;
+  int totale_bit_1 = 0;
 
-    // Iteriamo su ogni blocco di interi
-    for(int b = 0; b < num_blocchi; b++) {
-        
-        // 1. Chiamata Assembly per il blocco corrente
-        // Passiamo i singoli interi del bucket 'b'
-        int posPosVal = andBitABit(vPlus[b], wPlus[b]);
-        int negNegVal = andBitABit(vMinus[b], wMinus[b]);
-        int posNegVal = andBitABit(vPlus[b], wMinus[b]);
-        int negPosVal = andBitABit(vMinus[b], wPlus[b]);
+  // Iteriamo su ogni blocco di interi
+  for(int b = 0; b < num_blocchi; b++) {
 
-        // 2. Conteggio bit e accumulo nel totale
-        // Sommiamo (posPos + negNeg - posNeg - negPos) per questo blocco
-        totale_bit_1 += ottieniNumBitUno(posPosVal);
-        totale_bit_1 += ottieniNumBitUno(negNegVal);
-        totale_bit_1 -= ottieniNumBitUno(posNegVal);
-        totale_bit_1 -= ottieniNumBitUno(negPosVal);
-    }
+    // 1. Chiamata Assembly per il blocco corrente
+    // Passiamo i singoli interi del bucket 'b'
+    int posPosVal = andBitABit(vPlus[b], wPlus[b]);
+    int negNegVal = andBitABit(vMinus[b], wMinus[b]);
+    int posNegVal = andBitABit(vPlus[b], wMinus[b]);
+    int negPosVal = andBitABit(vMinus[b], wPlus[b]);
 
-    return (type)totale_bit_1;
+    // 2. Conteggio bit e accumulo nel totale
+    // Sommiamo (posPos + negNeg - posNeg - negPos) per questo blocco
+    totale_bit_1 += ottieniNumBitUno(posPosVal);
+    totale_bit_1 += ottieniNumBitUno(negNegVal);
+    totale_bit_1 -= ottieniNumBitUno(posNegVal);
+    totale_bit_1 -= ottieniNumBitUno(negPosVal);
+  }
+
+  return (type)totale_bit_1;
 }
 
 // Costruzione indice (distanze dataset <-> pivot)
@@ -152,8 +153,8 @@ void quantizing(VECTOR v, uint32_t *vMinus, uint32_t *vPlus, params* input, int 
 
   // 1. Reset
   for(int b = 0; b < num_blocchi_global; b++) {
-      vPlus[b] = 0;
-      vMinus[b] = 0;
+    vPlus[b] = 0;
+    vMinus[b] = 0;
   }
 
   for (int k = 0; k < D; k++)
@@ -188,7 +189,7 @@ void quantizing(VECTOR v, uint32_t *vMinus, uint32_t *vPlus, params* input, int 
   for (int i = 0; i < x; i++)
   {
     int original_idx = array_indici[i]; 
-    
+
     int bucket = original_idx / 32;
     int esponente_locale = original_idx % 32;
 
@@ -275,7 +276,7 @@ void preQuantizePivots(params *input)
   for (int i = 0; i < h; i++)
   {
     int pivot_idx = input->P[i];
-    
+
     uint32_t* pP = &pPlus[i * num_blocchi_global];
     uint32_t* pM = &pMinus[i * num_blocchi_global];
 
@@ -285,7 +286,7 @@ void preQuantizePivots(params *input)
       continue;
     }
     VECTOR p = &input->DS[pivot_idx * D];
-    
+
     quantizing(p, pM, pP, input, idx_buff);
   }
   free(idx_buff);
@@ -303,16 +304,38 @@ void process_block_for_query(int start_N, int end_N, VECTOR query, params *input
   {
     // A. Calcolo Lower Bound coi Pivot 
     type best_lb = 0.0;
+    int j;
 
     VECTOR current_index_row = &input->index[i * h];
 
-    for (int j = 0; j < h; j++)
+    type local_best = best_lb;
+    for (j = 0; j <= h-7; j+=7)
     {
-      type d_vi_pj = current_index_row[j]; 
-      type lb = ABS(d_vi_pj - dQP[j]);
-      if (lb > best_lb)
-        best_lb = lb;
+      type val0 = ABS(current_index_row[j]   - dQP[j]);
+      type val1 = ABS(current_index_row[j+1] - dQP[j+1]);
+      type val2 = ABS(current_index_row[j+2] - dQP[j+2]);
+      type val3 = ABS(current_index_row[j+3] - dQP[j+3]);
+      type val4 = ABS(current_index_row[j+4] - dQP[j+4]);
+      type val5 = ABS(current_index_row[j+5] - dQP[j+5]);
+      type val6 = ABS(current_index_row[j+6] - dQP[j+6]);
+      type val7 = ABS(current_index_row[j+7] - dQP[j+7]);
+
+      // Controlli separati (la CPU moderna gestisce bene questi branch se rari)
+      if (val0 > local_best) local_best = val0;
+      if (val1 > local_best) local_best = val1;
+      if (val2 > local_best) local_best = val2;
+      if (val3 > local_best) local_best = val3;
+      if (val4 > local_best) local_best = val4;
+      if (val5 > local_best) local_best = val5;
+      if (val6 > local_best) local_best = val6;
+      if (val7 > local_best) local_best = val7;
     }
+    for (; j < h; j++) {
+      type val = ABS(current_index_row[j] - dQP[j]);
+      if (val > local_best) local_best = val;
+    }
+
+    best_lb = local_best;
 
     type d_k_max = get_d_k_max(KNN, k);
 
@@ -321,7 +344,7 @@ void process_block_for_query(int start_N, int end_N, VECTOR query, params *input
 
     uint32_t* vPlus = &vPlus_all[i * num_blocchi_global];
     uint32_t* vMinus = &vMinus_all[i * num_blocchi_global];
-    
+
     type d_q_v_approx = distanzaApprossimataPreQ(vPlus, vMinus, qPlus, qMinus, D);
 
     // D. Inserimento
@@ -333,7 +356,7 @@ void process_block_for_query(int start_N, int end_N, VECTOR query, params *input
 }
 
 void fit(params* input){
-  
+
   num_blocchi_global = (input->D + 31) / 32;
 
   // Selezione dei pivot
@@ -428,26 +451,53 @@ void predict(params* input){
   } 
   free(idx_buff);
 
-  // iteriamo i blocchi di dataset in ram e calcoliamo tutte le query
-  for (int idxStart = 0; idxStart < N; idxStart += BLOCK_SIZE) {
-    int idxEnd = idxStart + BLOCK_SIZE;
-    if(idxEnd > N) idxEnd = N;
-    for(int q = 0; q < nq; q++) {
-      VECTOR query = &input->Q[q * D]; 
-      uint32_t* qPlus = &qPlusAll[q * num_blocchi_global];
-      uint32_t* qMinus = &qMinusAll[q * num_blocchi_global];
-      VECTOR dQP = &dQPAll[q * h];
-      VECTOR current_KNN = &KNNAll[q * 2 * k];
 
-      // Aggiorna lo stato KNN della query q con i dati del blocco dataset corrente
-      process_block_for_query(idxStart, idxEnd, query, input, qPlus, qMinus, dQP, current_KNN);
+#pragma omp parallel for
+  for (int qStart = 0; qStart < nq; qStart += BATCH_QUERY) {
+
+    int qEnd = qStart + BATCH_QUERY;
+    if (qEnd > nq) qEnd = nq;
+
+    // CACHE BLOCKING SU DATASET
+    for (int idxStart = 0; idxStart < N; idxStart += BLOCK_SIZE) {
+      int idxEnd = idxStart + BLOCK_SIZE;
+      if (idxEnd > N) idxEnd = N;
+
+      // utilizziamo il blocco del dataset per ogni query nel batch
+      for (int q = qStart; q < qEnd; q++) {
+
+        VECTOR query = &input->Q[q * D];
+        uint32_t* qPlus = &qPlusAll[q * num_blocchi_global];
+        uint32_t* qMinus = &qMinusAll[q * num_blocchi_global];
+        VECTOR dQP = &dQPAll[q * h];
+        VECTOR current_KNN = &KNNAll[q * 2 * k];
+
+        process_block_for_query(idxStart, idxEnd, query, input, qPlus, qMinus, dQP, current_KNN);
+      }
     }
   }
 
   for(int q = 0; q < nq; q++) {
     VECTOR query = &input->Q[q * D];
     VECTOR current_KNN = &KNNAll[q * 2 * k];
-
+    // Calcola distanze euclidee reali per i k candidati rimasti
+    for (int i = 0; i < k; i++)
+    {
+      int id_vicino = (int)current_KNN[2 * i];
+      if (id_vicino >= 0) {
+        VECTOR v = &input->DS[id_vicino * D];
+        current_KNN[2 * i + 1] = dEuclidea(query, v, D); 
+      }
+    }
+    // Scrittura output finale
+    for (int j = 0; j < k; j++) {
+      input->id_nn[q*k + j] = (int) current_KNN[2*j];      
+      input->dist_nn[q*k + j] = current_KNN[2*j + 1];     
+    }
+  }
+  for(int q = 0; q < nq; q++) {
+    VECTOR query = &input->Q[q * D];
+    VECTOR current_KNN = &KNNAll[q * 2 * k];
     // Calcola distanze euclidee reali per i k candidati rimasti
     for (int i = 0; i < k; i++)
     {

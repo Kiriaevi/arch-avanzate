@@ -6,10 +6,10 @@
 #include "common.h"
 #include "quantpivot32.c"
 
-//#define datasetFileName "dataset_2000x256_32.ds2"
-//#define queryFileName "query_2000x256_32.ds2"
-#define datasetFileName "generated_dataset.ds2"
-#define queryFileName "generated_queries.ds2"
+#define datasetFileName "dataset_2000x256_32.ds2"
+#define queryFileName "query_2000x256_32.ds2"
+//#define datasetFileName "generated_dataset.ds2"
+//#define queryFileName "generated_queries.ds2"
 
 static int N; // Righe dataset
 static int D;  // Colonne dataset
@@ -114,12 +114,7 @@ int main(int argc, char **argv)
   D = input->D;
   printf("N = %d, D = %d, h = %d, x = %d, k = %d\n", N,D,h,x,k);
 
-  clock_t t;
-
-  float elapsed;
-
-
-
+  double t;
   t = omp_get_wtime();
   // =========================================================
   fit(input);
@@ -132,6 +127,7 @@ int main(int argc, char **argv)
   else
     printf("%.3f\n", (double)t);
 
+  t = 0.0;
   t = omp_get_wtime();
   // =========================================================
   predict(input);
