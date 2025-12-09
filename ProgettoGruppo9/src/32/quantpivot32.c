@@ -326,12 +326,6 @@ void process_block_for_query(int start_N, int end_N, VECTOR query, params *input
       type val = ABS(current_index_row[j] - dQP[j]);
       if (val > local_best) local_best = val;
     }
-    for (; j < h; j++) {
-      type val = ABS(current_index_row[j] - dQP[j]);
-      if (val > local_best) local_best = val;
-    }
-
-    best_lb = local_best;
 
     best_lb = local_best;
 
