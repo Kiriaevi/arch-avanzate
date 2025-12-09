@@ -95,11 +95,10 @@ type get_d_k_max(VECTOR KNN, int k)
 // Calcolo distanza approssimata (Eq. 2 del documento)
 type distanzaApprossimataPreQ(uint32_t* vPlus, uint32_t* vMinus, uint32_t* wPlus, uint32_t* wMinus, int D)
 {
-    int num_blocchi = (D + 31) / 32;
     int totale_bit_1 = 0;
 
     // Iteriamo su ogni blocco di interi
-    for(int b = 0; b < num_blocchi; b++) {
+    for(int b = 0; b < num_blocchi_global; b++) {
         
         // 1. Chiamata Assembly per il blocco corrente
         // Passiamo i singoli interi del bucket 'b'
@@ -303,25 +302,49 @@ void process_block_for_query(int start_N, int end_N, VECTOR query, params *input
   {
     // A. Calcolo Lower Bound coi Pivot 
     type best_lb = 0.0;
+    int j;
 
     VECTOR current_index_row = &input->index[i * h];
 
-    for (int j = 0; j < h; j++)
+    type local_best = best_lb;
+    for (j = 0; j <= h-4; j+=4)
     {
-      type d_vi_pj = current_index_row[j]; 
-      type lb = ABS(d_vi_pj - dQP[j]);
-      if (lb > best_lb)
-        best_lb = lb;
+      type val0 = ABS(current_index_row[j]   - dQP[j]);
+      type val1 = ABS(current_index_row[j+1] - dQP[j+1]);
+      type val2 = ABS(current_index_row[j+2] - dQP[j+2]);
+      type val3 = ABS(current_index_row[j+3] - dQP[j+3]);
+
+      // Controlli separati (la CPU moderna gestisce bene questi branch se rari)
+      if (val0 > local_best) local_best = val0;
+      if (val1 > local_best) local_best = val1;
+      if (val2 > local_best) local_best = val2;
+      if (val3 > local_best) local_best = val3;
+    }
+    for (; j < h; j++) {
+      type val = ABS(current_index_row[j] - dQP[j]);
+      if (val > local_best) local_best = val;
     }
 
-    type d_k_max = get_d_k_max(KNN, k);
+    best_lb = local_best;
+
+    type d_k_max = 0.0;
+    type max_distance = -1.0;
+    for (int i = 0; i < k; i++)
+    {
+      type current_distance = KNN[(i * 2) + 1];
+      if (current_distance > max_distance)
+      {
+        max_distance = current_distance;
+      }
+    }
+    d_k_max = max_distance;
 
     if (best_lb >= d_k_max)
       continue;
 
     uint32_t* vPlus = &vPlus_all[i * num_blocchi_global];
     uint32_t* vMinus = &vMinus_all[i * num_blocchi_global];
-    
+
     type d_q_v_approx = distanzaApprossimataPreQ(vPlus, vMinus, qPlus, qMinus, D);
 
     // D. Inserimento
@@ -331,6 +354,7 @@ void process_block_for_query(int start_N, int end_N, VECTOR query, params *input
     }
   }
 }
+
 
 void fit(params* input){
   
