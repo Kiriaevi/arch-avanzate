@@ -96,11 +96,10 @@ static inline type get_d_k_max(VECTOR KNN, int k)
 // Calcolo distanza approssimata (Eq. 2 del documento)
 type distanzaApprossimataPreQ(uint32_t* vPlus, uint32_t* vMinus, uint32_t* wPlus, uint32_t* wMinus, int D)
 {
-  int num_blocchi = (D + 31) / 32;
   int totale_bit_1 = 0;
 
   // Iteriamo su ogni blocco di interi
-  for(int b = 0; b < num_blocchi; b++) {
+  for(int b = 0; b < num_blocchi_global; b++) {
 
     // 1. Chiamata Assembly per il blocco corrente
     // Passiamo i singoli interi del bucket 'b'
@@ -108,6 +107,7 @@ type distanzaApprossimataPreQ(uint32_t* vPlus, uint32_t* vMinus, uint32_t* wPlus
     int negNegVal = andBitABit(vMinus[b], wMinus[b]);
     int posNegVal = andBitABit(vPlus[b], wMinus[b]);
     int negPosVal = andBitABit(vMinus[b], wPlus[b]);
+
 
     // 2. Conteggio bit e accumulo nel totale
     // Sommiamo (posPos + negNeg - posNeg - negPos) per questo blocco
@@ -309,26 +309,22 @@ void process_block_for_query(int start_N, int end_N, VECTOR query, params *input
     VECTOR current_index_row = &input->index[i * h];
 
     type local_best = best_lb;
-    for (j = 0; j <= h-7; j+=7)
+    for (j = 0; j <= h-4; j+=4)
     {
       type val0 = ABS(current_index_row[j]   - dQP[j]);
       type val1 = ABS(current_index_row[j+1] - dQP[j+1]);
       type val2 = ABS(current_index_row[j+2] - dQP[j+2]);
       type val3 = ABS(current_index_row[j+3] - dQP[j+3]);
-      type val4 = ABS(current_index_row[j+4] - dQP[j+4]);
-      type val5 = ABS(current_index_row[j+5] - dQP[j+5]);
-      type val6 = ABS(current_index_row[j+6] - dQP[j+6]);
-      type val7 = ABS(current_index_row[j+7] - dQP[j+7]);
 
       // Controlli separati (la CPU moderna gestisce bene questi branch se rari)
       if (val0 > local_best) local_best = val0;
       if (val1 > local_best) local_best = val1;
       if (val2 > local_best) local_best = val2;
       if (val3 > local_best) local_best = val3;
-      if (val4 > local_best) local_best = val4;
-      if (val5 > local_best) local_best = val5;
-      if (val6 > local_best) local_best = val6;
-      if (val7 > local_best) local_best = val7;
+    }
+    for (; j < h; j++) {
+      type val = ABS(current_index_row[j] - dQP[j]);
+      if (val > local_best) local_best = val;
     }
     for (; j < h; j++) {
       type val = ABS(current_index_row[j] - dQP[j]);
@@ -337,7 +333,19 @@ void process_block_for_query(int start_N, int end_N, VECTOR query, params *input
 
     best_lb = local_best;
 
-    type d_k_max = get_d_k_max(KNN, k);
+    best_lb = local_best;
+
+    type d_k_max = 0.0;
+    type max_distance = -1.0;
+    for (int i = 0; i < k; i++)
+    {
+      type current_distance = KNN[(i * 2) + 1];
+      if (current_distance > max_distance)
+      {
+        max_distance = current_distance;
+      }
+    }
+    d_k_max = max_distance;
 
     if (best_lb >= d_k_max)
       continue;
@@ -354,6 +362,7 @@ void process_block_for_query(int start_N, int end_N, VECTOR query, params *input
     }
   }
 }
+
 
 void fit(params* input){
 
