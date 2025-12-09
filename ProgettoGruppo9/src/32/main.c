@@ -114,11 +114,7 @@ int main(int argc, char **argv)
   D = input->D;
   printf("N = %d, D = %d, h = %d, x = %d, k = %d\n", N,D,h,x,k);
 
-  clock_t t;
-
-  float elapsed;
-
-
+  double t;
 
   t = omp_get_wtime();
   // =========================================================
