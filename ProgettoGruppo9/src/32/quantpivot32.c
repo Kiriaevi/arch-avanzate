@@ -109,10 +109,10 @@ type distanzaApprossimataPreQ(uint32_t* vPlus, uint32_t* vMinus, uint32_t* wPlus
 
         // 2. Conteggio bit e accumulo nel totale
         // Sommiamo (posPos + negNeg - posNeg - negPos) per questo blocco
-        totale_bit_1 += ottieniNumBitUno(posPosVal);
-        totale_bit_1 += ottieniNumBitUno(negNegVal);
-        totale_bit_1 -= ottieniNumBitUno(posNegVal);
-        totale_bit_1 -= ottieniNumBitUno(negPosVal);
+        totale_bit_1 += __builtin_popcount(posPosVal);
+        totale_bit_1 += __builtin_popcount(negNegVal);
+        totale_bit_1 -= __builtin_popcount(posNegVal);
+        totale_bit_1 -= __builtin_popcount(negPosVal);
     }
 
     return (type)totale_bit_1;
