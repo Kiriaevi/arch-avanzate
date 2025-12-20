@@ -101,22 +101,16 @@ type distanzaApprossimataPreQ(uint32_t* vPlus, uint32_t* vMinus, uint32_t* wPlus
   // Iteriamo su ogni blocco di interi
   for(int b = 0; b < num_blocchi_global; b++) {
 
-    // 1. Chiamata Assembly per il blocco corrente
-    // Passiamo i singoli interi del bucket 'b'
     int posPosVal = andBitABit(vPlus[b], wPlus[b]);
     int negNegVal = andBitABit(vMinus[b], wMinus[b]);
     int posNegVal = andBitABit(vPlus[b], wMinus[b]);
     int negPosVal = andBitABit(vMinus[b], wPlus[b]);
 
-
-    // 2. Conteggio bit e accumulo nel totale
-    // Sommiamo (posPos + negNeg - posNeg - negPos) per questo blocco
-    totale_bit_1 += ottieniNumBitUno(posPosVal);
-    totale_bit_1 += ottieniNumBitUno(negNegVal);
-    totale_bit_1 -= ottieniNumBitUno(posNegVal);
-    totale_bit_1 -= ottieniNumBitUno(negPosVal);
-  }
-
+    totale_bit_1 += __builtin_popcount(posPosVal);
+    totale_bit_1 += __builtin_popcount(negNegVal);
+    totale_bit_1 -= __builtin_popcount(posNegVal);
+    totale_bit_1 -= __builtin_popcount(negPosVal);
+    }
   return (type)totale_bit_1;
 }
 
@@ -292,6 +286,14 @@ void preQuantizePivots(params *input)
   free(idx_buff);
 }
 
+static inline float update_d_k_max(float *KNN, int k) {
+    float max_dist = -1.0f;
+    for (int i = 0; i < k; i++) {
+        float d = KNN[i * 2 + 1]; // Indici dispari sono le distanze
+        if (d > max_dist) max_dist = d;
+    }
+    return max_dist;
+}
 // Processa un blocco di dataset [start_N, end_N) per una specifica query
 void process_block_for_query(int start_N, int end_N, VECTOR query, params *input, uint32_t* qPlus, uint32_t* qMinus, VECTOR dQP, VECTOR KNN) 
 {
@@ -299,10 +301,10 @@ void process_block_for_query(int start_N, int end_N, VECTOR query, params *input
   int h = input->h;
   int k = input->k;
 
-  // Itera SOLO sul blocco corrente del dataset
+
+  type d_k_max = update_d_k_max(KNN, k);
   for (int i = start_N; i < end_N; i++)
   {
-    // A. Calcolo Lower Bound coi Pivot 
     type best_lb = 0.0;
     int j;
 
@@ -316,7 +318,6 @@ void process_block_for_query(int start_N, int end_N, VECTOR query, params *input
       type val2 = ABS(current_index_row[j+2] - dQP[j+2]);
       type val3 = ABS(current_index_row[j+3] - dQP[j+3]);
 
-      // Controlli separati (la CPU moderna gestisce bene questi branch se rari)
       if (val0 > local_best) local_best = val0;
       if (val1 > local_best) local_best = val1;
       if (val2 > local_best) local_best = val2;
@@ -328,18 +329,6 @@ void process_block_for_query(int start_N, int end_N, VECTOR query, params *input
     }
 
     best_lb = local_best;
-
-    type d_k_max = 0.0;
-    type max_distance = -1.0;
-    for (int i = 0; i < k; i++)
-    {
-      type current_distance = KNN[(i * 2) + 1];
-      if (current_distance > max_distance)
-      {
-        max_distance = current_distance;
-      }
-    }
-    d_k_max = max_distance;
 
     if (best_lb >= d_k_max)
       continue;
@@ -353,6 +342,7 @@ void process_block_for_query(int start_N, int end_N, VECTOR query, params *input
     if (d_q_v_approx < d_k_max)
     {
       insert_into_knn(KNN, k, i, d_q_v_approx);
+      d_k_max = update_d_k_max(KNN, k);
     }
   }
 }
