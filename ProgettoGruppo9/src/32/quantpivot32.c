@@ -78,19 +78,6 @@ void insert_into_knn(VECTOR KNN, int k, int id, type distance)
 }
 
 // Recupera la distanza massima attuale nella lista K-NN (il raggio di ricerca)
-type get_d_k_max(VECTOR KNN, int k)
-{
-  type max_distance = -1.0f;
-  for (int i = 0; i < k; i++)
-  {
-    type current_distance = KNN[(i * 2) + 1];
-    if (current_distance > max_distance)
-    {
-      max_distance = current_distance;
-    }
-  }
-  return max_distance;
-}
 
 // Calcolo distanza approssimata (Eq. 2 del documento)
 type distanzaApprossimataPreQ(uint32_t* vPlus, uint32_t* vMinus, uint32_t* wPlus, uint32_t* wMinus, int D)
@@ -290,13 +277,18 @@ void preQuantizePivots(params *input)
   free(idx_buff);
 }
 
-static inline float update_d_k_max(float *KNN, int k) {
-    float max_dist = -1.0f;
-    for (int i = 0; i < k; i++) {
-        float d = KNN[i * 2 + 1]; // Indici dispari sono le distanze
-        if (d > max_dist) max_dist = d;
+type get_d_k_max(VECTOR KNN, int k)
+{
+  type max_distance = -1.0f;
+  for (int i = 0; i < k; i++)
+  {
+    type current_distance = KNN[(i * 2) + 1];
+    if (current_distance > max_distance)
+    {
+      max_distance = current_distance;
     }
-    return max_dist;
+  }
+  return max_distance;
 }
 // Processa un blocco di dataset [start_N, end_N) per una specifica query
 void process_block_for_query(int start_N, int end_N, VECTOR query, params *input, uint32_t* qPlus, uint32_t* qMinus, VECTOR dQP, VECTOR KNN) 
@@ -306,7 +298,7 @@ void process_block_for_query(int start_N, int end_N, VECTOR query, params *input
   int k = input->k;
 
 
-  type d_k_max = update_d_k_max(KNN, k);
+  type d_k_max = get_d_k_max(KNN, k);
   for (int i = start_N; i < end_N; i++)
   {
     type best_lb = 0.0;
