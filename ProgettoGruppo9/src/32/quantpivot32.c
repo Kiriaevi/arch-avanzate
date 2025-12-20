@@ -102,10 +102,10 @@ type distanzaApprossimataPreQ(uint32_t* vPlus, uint32_t* vMinus, uint32_t* wPlus
         
         // 1. Chiamata Assembly per il blocco corrente
         // Passiamo i singoli interi del bucket 'b'
-        int posPosVal = andBitABit(vPlus[b], wPlus[b]);
+        int posPosVal = andBitABit(vPlus[b], wPlus[b]); // lo scopo di questa funzione è quello di prendere due interi, calcolarne l'and bit a bit e poi sommare il numero di 1
         int negNegVal = andBitABit(vMinus[b], wMinus[b]);
         int posNegVal = andBitABit(vPlus[b], wMinus[b]);
-        int negPosVal = andBitABit(vMinus[b], wPlus[b]);
+        int negPosVal = andBitABit(vMinus[b], wPlus[b]); 
 
         // 2. Conteggio bit e accumulo nel totale
         // Sommiamo (posPos + negNeg - posNeg - negPos) per questo blocco
