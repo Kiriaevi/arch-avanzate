@@ -338,7 +338,7 @@ void process_block_for_query(int start_N, int end_N, VECTOR query, params *input
     if (d_q_v_approx < d_k_max)
     {
       insert_into_knn(KNN, k, i, d_q_v_approx);
-      d_k_max = update_d_k_max(KNN, k);
+      d_k_max = get_d_k_max(KNN, k);
     }
   }
 }
