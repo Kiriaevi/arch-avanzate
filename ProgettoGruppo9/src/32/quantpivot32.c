@@ -19,7 +19,7 @@ uint32_t* pMinus = NULL;
 int num_blocchi_global = 0;
 
 /* Ma che vuol dire che in C non c'è l'overloading della funzioni... -> https://en.cppreference.com/w/c/language/generic.html*/
-extern int andBitABit(int v, int w);
+extern int distApprossimata(uint32_t *vPlus, uint32_t *vMinus, uint32_t *wPlus, uint32_t *wMinus, int D);
 extern float prodScalaref(float *v, float *w, int D);
 extern double prodScalared(double *v, double *w, int D);
 #define prodScalare(v,w,D) _Generic((v), float*: prodScalaref, double*:prodScalared)(v,w,D) 
@@ -29,17 +29,6 @@ extern double dEuclidead(double *v, double *w, int D);
 
 /*GENERALIZZO IL PROGRAMMA PER FUNZIONARE SIA CON DOUBLE CHE CON FLOAT*/
 #define ABS(x) _Generic((x), float: fabsf, double: fabs)(x)
-
-int ottieniNumBitUno(uint32_t n) {
-    int count = 0;
-    while (n > 0) {
-        if (n & 1) { 
-            count++;
-        }
-        n >>= 1; //esempio: 1101 >> 1 = 0110
-    }
-    return count;
-}
 
 // Funzione di pulizia (chiamata alla fine di predict)
 void freePreQuantization()
@@ -85,22 +74,20 @@ type distanzaApprossimataPreQ(uint32_t* vPlus, uint32_t* vMinus, uint32_t* wPlus
     int totale_bit_1 = 0;
 
     // Iteriamo su ogni blocco di interi
-    for(int b = 0; b < num_blocchi_global; b++) {
-        
-        // 1. Chiamata Assembly per il blocco corrente
-        // Passiamo i singoli interi del bucket 'b'
-        int posPosVal = andBitABit(vPlus[b], wPlus[b]);
-        int negNegVal = andBitABit(vMinus[b], wMinus[b]);
-        int posNegVal = andBitABit(vPlus[b], wMinus[b]);
-        int negPosVal = andBitABit(vMinus[b], wPlus[b]);
 
-        // 2. Conteggio bit e accumulo nel totale
-        // Sommiamo (posPos + negNeg - posNeg - negPos) per questo blocco
-        totale_bit_1 += __builtin_popcount(posPosVal);
-        totale_bit_1 += __builtin_popcount(negNegVal);
-        totale_bit_1 -= __builtin_popcount(posNegVal);
-        totale_bit_1 -= __builtin_popcount(negPosVal);
-    }
+
+    // 1. Chiamata Assembly per il blocco corrente
+    // Passiamo i singoli interi del bucket 'b'
+    int posPosVal = distApprossimata(vPlus, vMinus, wPlus, wMinus, D);
+
+    // 2. Conteggio bit e accumulo nel totale
+    // Sommiamo (posPos + negNeg - posNeg - negPos) per questo blocco
+
+   // totale_bit_1 += __builtin_popcount(posPosVal);
+   // totale_bit_1 += __builtin_popcount(negNegVal);
+   // totale_bit_1 -= __builtin_popcount(posNegVal);
+   // totale_bit_1 -= __builtin_popcount(negPosVal);
+
 
     return (type)totale_bit_1;
 }
@@ -112,6 +99,8 @@ VECTOR indexing(params* input)
   int h = input->h;
   int D = input->D;
 
+  // TODO:
+  // perché allineare a 32 byte?
   VECTOR output = _mm_malloc(N * h * sizeof(type), 32); 
 
   if (output == NULL) return NULL;
@@ -124,7 +113,7 @@ VECTOR indexing(params* input)
     {
       uint32_t* pPlusC = &pPlus[c * num_blocchi_global];
       uint32_t* pMinusC = &pMinus[c * num_blocchi_global];
-      output[r * h + c] = distanzaApprossimataPreQ(vPlus, vMinus, pPlusC, pMinusC, D);
+      output[r * h + c] = (type)distApprossimata(vPlus, vMinus, pPlusC, pMinusC, D);
     }
   }
   return output;
@@ -332,7 +321,7 @@ void process_block_for_query(int start_N, int end_N, VECTOR query, params *input
     uint32_t* vPlus = &vPlus_all[i * num_blocchi_global];
     uint32_t* vMinus = &vMinus_all[i * num_blocchi_global];
 
-    type d_q_v_approx = distanzaApprossimataPreQ(vPlus, vMinus, qPlus, qMinus, D);
+    type d_q_v_approx = (type)distApprossimata(vPlus, vMinus, qPlus, qMinus, D);
 
     // D. Inserimento
     if (d_q_v_approx < d_k_max)
