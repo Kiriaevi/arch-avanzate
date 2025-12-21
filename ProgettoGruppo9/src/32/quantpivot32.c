@@ -89,7 +89,7 @@ VECTOR indexing(params* input)
     {
       uint32_t* pPlusC = &pPlus[c * num_blocchi_global];
       uint32_t* pMinusC = &pMinus[c * num_blocchi_global];
-      output[r * h + c] = (type)distApprossimata(vPlus, vMinus, pPlusC, pMinusC, D);
+      output[r * h + c] = (type)distApprossimata(vPlus, vMinus, pPlusC, pMinusC, num_blocchi_global);
     }
   }
   return output;
@@ -297,7 +297,7 @@ void process_block_for_query(int start_N, int end_N, VECTOR query, params *input
     uint32_t* vPlus = &vPlus_all[i * num_blocchi_global];
     uint32_t* vMinus = &vMinus_all[i * num_blocchi_global];
 
-    type d_q_v_approx = (type)distApprossimata(vPlus, vMinus, qPlus, qMinus, D);
+    type d_q_v_approx = (type)distApprossimata(vPlus, vMinus, qPlus, qMinus, num_blocchi_global);
 
     // D. Inserimento
     if (d_q_v_approx < d_k_max)
@@ -400,7 +400,7 @@ void predict(params* input){
     for (int j = 0; j < h; j++) {
       uint32_t* pPlusC = &pPlus[j * num_blocchi_global]; 
       uint32_t* pMinusC = &pMinus[j * num_blocchi_global];
-      dQP[j] = (type)distApprossimata(qPlus, qMinus, pPlusC, pMinusC, D);
+      dQP[j] = (type)distApprossimata(qPlus, qMinus, pPlusC, pMinusC, num_blocchi_global);
     }
   } 
   free(idx_buff);
