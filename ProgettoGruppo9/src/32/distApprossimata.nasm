@@ -1,7 +1,6 @@
 section .text
 global distApprossimata
 
-
 ;== distApprossimata
 ; si implementa la formula (v+ ◦ w+) + (v− ◦ w−) − (v+ ◦ w−) − (v− ◦ w+)
 ; calcolare un prodotto scalare significa fare l'and bit a bit di 
@@ -11,110 +10,114 @@ global distApprossimata
 ; vPlus -> rdi; vMinus -> rsi; wPlus -> rdx; wMinus -> rcx; length -> r8
 
 distApprossimata:
-  push    rbp
-  mov     rbp, rsp
+    push    rbp
+    mov     rbp, rsp
+    push    rbx             
 
-  shl     r8, 2             ; n in byte, lo uso per il ciclo resto
-  mov     r10, r8           
-  shr     r10, 4            ; n/4 
-  shl     r10, 2            ; n/4 in byte, lo uso come indice per il loop vettorizzato
-  xor     r9, r9            ; i = 0
-  xor     rcx, rcx          ; risultato vPlus_wPlus
-  xor     rdx, rdx          ; risultato vMinus_wMinus
-  xor     r11, r11          ; risultato vPlus_wMinus
-  xor     r12, r12          ; risultato vMinus_wPlus
-  xor     r13, r13          ; j = 0
+    shl     r8, 2           ; n in byte, lo uso per il ciclo resto
+    mov     r10, r8            
+    shr     r10, 4          ; n/16 
+    shl     r10, 4          ; n/16 * 16, lo uso come limite per il loop vettorizzato
+    
+    xor     r9, r9          ; i = 0
+    xor     r11, r11        
+
+loop_vettorizzato:
+    cmp     r9, r10
+    jge     loop_resto
+    
+    ; Carico 4 elementi da ogni vettore e faccio delle copie per evitare la sovrascrittura
+    movups  xmm0, [rdi + r9]      ; vPlus 
+    movups  xmm1, [rsi + r9]      ; vMinus
+    movups  xmm2, [rdx + r9]      ; wPlus
+    movups  xmm3, [rcx + r9]      ; wMinus (RCX è ancora valido qui)
+
+    ; -- 1. (v+ ◦ w+) -> Somma --
+    movaps  xmm4, xmm0            ; copia vPlus
+    pand    xmm4, xmm2            ; vPlus ◦ wPlus
+    
+    movq    rax,  xmm4
+    movhlps xmm4, xmm4
+    movq    rbx,  xmm4
+    popcnt  rax, rax
+    popcnt  rbx, rbx
+    add     r11, rax
+    add     r11, rbx              ; sommo all'accumulatore r11
+
+    ; -- 2. (v- ◦ w-) -> Somma --
+    movaps  xmm5, xmm1            ; copia vMinus
+    pand    xmm5, xmm3            ; vMinus ◦ wMinus
+
+    movq    rax,  xmm5
+    movhlps xmm5, xmm5
+    movq    rbx,  xmm5
+    popcnt  rax, rax
+    popcnt  rbx, rbx
+    add     r11, rax
+    add     r11, rbx
+
+    ; -- 3. (v+ ◦ w-) -> Sottrai --
+    ; Riusiamo xmm0 (vPlus) direttamente
+    pand    xmm0, xmm3            ; vPlus ◦ wMinus
+
+    movq    rax,  xmm0
+    movhlps xmm0, xmm0
+    movq    rbx,  xmm0
+    popcnt  rax, rax
+    popcnt  rbx, rbx
+    sub     r11, rax              ; sottraggo dall'accumulatore
+    sub     r11, rbx
+
+    ; -- 4. (v- ◦ w+) -> Sottrai --
+    ; Riusiamo xmm1 (vMinus) direttamente
+    pand    xmm1, xmm2            ; vMinus ◦ wPlus
+
+    movq    rax,  xmm1
+    movhlps xmm1, xmm1
+    movq    rbx,  xmm1
+    popcnt  rax, rax
+    popcnt  rbx, rbx
+    sub     r11, rax
+    sub     r11, rbx
   
+    add     r9, 16
+    jmp     loop_vettorizzato
 
+loop_resto:
+    cmp     r9, r8
+    jge     fine
+    
+    ; Carico 1 elemento alla volta e uso EAX per calcoli rapidi
+    
+    ; 1. vPlus ◦ wPlus (Somma)
+    mov     eax, [rdi + r9]       ; vPlus 
+    and     eax, [rdx + r9]       ; wPlus
+    popcnt  eax, eax
+    add     r11, rax
 
-vPlus_wPlus_loop_vettorizzato:
-  cmp     r9, r10
-  jge     vPlus_wPlus_loop_resto
-  movups  xmm0, [rdi + r9]      ; vPlus 
-  movups  xmm1, [rdx + r9]      ; wPlus
-  pand    xmm0, xmm1            ; and bit a bit
-  movq    rax,  xmm0
-  movhlps xmm0, xmm0
-  movq    rbx,  xmm0
-  popcnt  rax, rax
-  popcnt  rbx, rbx
-  add     rax, rbx
-  add     rcx, rax              ; ora in rcx c'è il risultato parziale
-  add     r9, 16
-  jmp     vPlus_wPlus_loop_vettorizzato
+    ; 2. vMinus ◦ wMinus (Somma)
+    mov     eax, [rsi + r9]       ; vMinus
+    and     eax, [rcx + r9]       ; wMinus
+    popcnt  eax, eax
+    add     r11, rax
 
-vPlus_wPlus_loop_resto:
-  cmp     r9, r8
-  jge     vMinus_wMinus_loop_vettorizzato
-  mov     eax, [rdi + r9]       ; vPlus
-  mov     ebx, [rdx + r9]       ; wPlus
-  and     eax, ebx              ; and bit a bit
-  popcnt  eax, eax
-  add     rcx, rax              ; sarà il risultato finale
-  add     r9, 4
-  jmp     vPlus_wPlus_loop_resto
+    ; 3. vPlus ◦ wMinus (Sottrai)
+    mov     eax, [rdi + r9]       ; vPlus
+    and     eax, [rcx + r9]       ; wMinus
+    popcnt  eax, eax
+    sub     r11, rax
 
-vMinus_wMinus_loop_vettorizzato:
-  cmp     r13, r10
-  jge     vMinus_wMinus_loop_resto
-  movups  xmm0, [rsi + r9]      ; vMinus 
-  movups  xmm1, [rcx + r9]      ; wMinus
-  pand    xmm0, xmm1            ; and bit a bit
-  movq    rax,  xmm0
-  movhlps xmm0, xmm0
-  movq    rbx,  xmm0
-  popcnt  rax, rax
-  popcnt  rbx, rbx
-  add     rax, rbx
-  add     rdx, rax              ; ora in rdx c'è il risultato parziale
-  add     r13, 16
-  jmp     vMinus_wMinus_loop_vettorizzato
- 
+    ; 4. vMinus ◦ wPlus (Sottrai)
+    mov     eax, [rsi + r9]       ; vMinus
+    and     eax, [rdx + r9]       ; wPlus
+    popcnt  eax, eax
+    sub     r11, rax
 
-vMinus_wMinus_loop_resto:
-  xor     r9, r9           ; i = 0
-  cmp     r13, r8
-  jge     vPlus_wMinus_loop_vettorizzato
-  mov     eax, [rsi + r9]       ; vMinus
-  mov     ebx, [rcx + r9]       ; wMinus
-  and     eax, ebx              ; and bit a bit
-  popcnt  eax, eax
-  add     rdx, rax              ; sarà il risultato finale
-  add     r13, 4
-  jmp     vMinus_wMinus_loop_resto
-
-vPlus_wMinus_loop_vettorizzato:
-  cmp     r9, r10
-  jge     vPlus_wMinus_loop_resto
-  movups  xmm0, [rdi + r9]      ; vPlus 
-  movups  xmm1, [rcx + r9]      ; wMinus
-  pand    xmm0, xmm1            ; and bit a bit
-  movq    rax,  xmm0
-  movhlps xmm0, xmm0
-  movq    rbx,  xmm0
-  popcnt  rax, rax
-  popcnt  rbx, rbx
-  add     rax, rbx
-  add     r11, rax              ; ora in r11 c'è il risultato parziale
-  add     r9, 16
-  jmp     vPlus_wMinus_loop_vettorizzato
-
-vPlus_wMinus_loop_resto:
-  xor     r13, r13         ; j = 0
-  cmp     r9, r8
-  jge     vMinus_wPlus_loop_vettorizzato
-  mov     eax, [rdi + r9]       ; vPlus
-  mov     ebx, [rcx + r9]       ; wMinus
-  and     eax, ebx              ; and bit a bit
-  popcnt  eax, eax
-  add     r11, rax              ; sarà il risultato finale
-  add     r9, 4
-  jmp     vPlus_wMinus_loop_resto
-
-vMinus_wPlus_loop_vettorizzato:
-
-vMinus_wPlus_loop_resto:
+    add     r9, 4
+    jmp     loop_resto
 
 fine: 
-  pop     rbp
-  ret            
+    mov     rax, r11       
+    pop     rbx             
+    pop     rbp
+    ret

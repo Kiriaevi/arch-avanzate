@@ -68,30 +68,6 @@ void insert_into_knn(VECTOR KNN, int k, int id, type distance)
 
 // Recupera la distanza massima attuale nella lista K-NN (il raggio di ricerca)
 
-// Calcolo distanza approssimata (Eq. 2 del documento)
-type distanzaApprossimataPreQ(uint32_t* vPlus, uint32_t* vMinus, uint32_t* wPlus, uint32_t* wMinus, int D)
-{
-    int totale_bit_1 = 0;
-
-    // Iteriamo su ogni blocco di interi
-
-
-    // 1. Chiamata Assembly per il blocco corrente
-    // Passiamo i singoli interi del bucket 'b'
-    int posPosVal = distApprossimata(vPlus, vMinus, wPlus, wMinus, D);
-
-    // 2. Conteggio bit e accumulo nel totale
-    // Sommiamo (posPos + negNeg - posNeg - negPos) per questo blocco
-
-   // totale_bit_1 += __builtin_popcount(posPosVal);
-   // totale_bit_1 += __builtin_popcount(negNegVal);
-   // totale_bit_1 -= __builtin_popcount(posNegVal);
-   // totale_bit_1 -= __builtin_popcount(negPosVal);
-
-
-    return (type)totale_bit_1;
-}
-
 // Costruzione indice (distanze dataset <-> pivot)
 VECTOR indexing(params* input)
 {
@@ -424,7 +400,7 @@ void predict(params* input){
     for (int j = 0; j < h; j++) {
       uint32_t* pPlusC = &pPlus[j * num_blocchi_global]; 
       uint32_t* pMinusC = &pMinus[j * num_blocchi_global];
-      dQP[j] = distanzaApprossimataPreQ(qPlus, qMinus, pPlusC, pMinusC, D);
+      dQP[j] = (type)distApprossimata(qPlus, qMinus, pPlusC, pMinusC, D);
     }
   } 
   free(idx_buff);
