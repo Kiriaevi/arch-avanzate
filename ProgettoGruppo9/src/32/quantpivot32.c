@@ -21,9 +21,6 @@ int num_blocchi_global = 0;
 /* Ma che vuol dire che in C non c'è l'overloading della funzioni... -> https://en.cppreference.com/w/c/language/generic.html*/
 extern float trovaMassimof(float *current_index_row, float *dQP, int h);
 extern int distApprossimata(uint32_t *vPlus, uint32_t *vMinus, uint32_t *wPlus, uint32_t *wMinus, int D);
-extern float prodScalaref(float *v, float *w, int D);
-extern double prodScalared(double *v, double *w, int D);
-#define prodScalare(v, w, D) _Generic((v), float *: prodScalaref, double *: prodScalared)(v, w, D)
 extern float dEuclideaf(float *v, float *w, int D);
 extern double dEuclidead(double *v, double *w, int D);
 #define dEuclidea(v, w, D) _Generic((v), float *: dEuclideaf, double *: dEuclidead)(v, w, D)
