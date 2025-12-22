@@ -30,7 +30,7 @@ loop_vettorizzato:
     movups  xmm0, [rdi + r9]      ; vPlus 
     movups  xmm1, [rsi + r9]      ; vMinus
     movups  xmm2, [rdx + r9]      ; wPlus
-    movups  xmm3, [rcx + r9]      ; wMinus (RCX è ancora valido qui)
+    movups  xmm3, [rcx + r9]      ; wMinus 
 
     ; -- 1. (v+ ◦ w+) -> Somma --
     movaps  xmm4, xmm0            ; copia vPlus

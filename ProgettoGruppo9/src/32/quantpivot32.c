@@ -19,6 +19,7 @@ uint32_t *pMinus = NULL;
 int num_blocchi_global = 0;
 
 /* Ma che vuol dire che in C non c'è l'overloading della funzioni... -> https://en.cppreference.com/w/c/language/generic.html*/
+extern float trovaMassimof(float *current_index_row, float *dQP, int h);
 extern int distApprossimata(uint32_t *vPlus, uint32_t *vMinus, uint32_t *wPlus, uint32_t *wMinus, int D);
 extern float prodScalaref(float *v, float *w, int D);
 extern double prodScalared(double *v, double *w, int D);
@@ -282,104 +283,30 @@ void process_block_for_query(int start_N, int end_N, float* query, params *input
     int h = input->h;
     int k = input->k;
 
-    // --- OTTIMIZZAZIONE 1: Hoisting di d_k_max ---
-    // Calcoliamo la soglia di ingresso UNA volta sola all'inizio.
     float d_k_max = get_d_k_max(KNN, k);
-
-    // Maschera per il Valore Assoluto (0x7FFFFFFF) allineata a 16 byte per sicurezza
-    // Mantiene tutti i bit tranne il bit del segno.
-    static const unsigned int absMaskArr[4] __attribute__((aligned(16))) = 
-        {0x7FFFFFFF, 0x7FFFFFFF, 0x7FFFFFFF, 0x7FFFFFFF};
 
     // Itera SOLO sul blocco corrente del dataset
     for (int i = start_N; i < end_N; i++)
     {
         float *current_index_row = &input->index[i * h];
         float best_lb = 0.0f;
-        
-        // --- A. Calcolo Lower Bound (Inline Assembly SSE) ---
-        // Sostituisce il ciclo for(j=0; j<=h-4; j+=4)
-        
         float local_best = 0.0f;
         int j = 0;
 
-        __asm__ volatile (
-            // 1. Azzera l'accumulatore del massimo (xmm0 = 0, 0, 0, 0)
-            "xorps %%xmm0, %%xmm0 \n\t"
-            
-            // 2. Loop Label
-            "start_loop_sse_%=: \n\t" // %= genera un id univoco per le label
-
-            // 3. Controllo loop: if ((h - j) < 4) break;
-            "movl %[h], %%eax \n\t"
-            "subl %[j], %%eax \n\t"
-            "cmpl $4, %%eax \n\t"
-            "jl end_loop_sse_%= \n\t"
-
-            // 4. Caricamento dati (4 float alla volta)
-            // movups gestisce memoria non allineata (più sicuro di movaps)
-            "movups (%[row], %[ptr_j], 4), %%xmm1 \n\t" // xmm1 = current_index_row[j...j+3]
-            "movups (%[dqp], %[ptr_j], 4), %%xmm2 \n\t" // xmm2 = dQP[j...j+3]
-
-            // 5. Calcolo: ABS(a - b)
-            "subps %%xmm2, %%xmm1 \n\t"        // Sottrazione parallela
-            "andps %[mask], %%xmm1 \n\t"       // AND logico per togliere il segno (ABS)
-
-            // 6. Aggiornamento Max
-            "maxps %%xmm1, %%xmm0 \n\t"        // xmm0 mantiene i massimi parziali
-
-            // 7. Incremento indice e salto
-            "addl $4, %[j] \n\t"
-            "jmp start_loop_sse_%= \n\t"
-
-            "end_loop_sse_%=: \n\t"
-
-            // 8. Riduzione Orizzontale (Trova il max unico dentro xmm0)
-            // xmm0 = [A, B, C, D]
-            "movhlps %%xmm0, %%xmm1 \n\t"      // xmm1 = [A, B] (sposta parte alta)
-            "maxps %%xmm1, %%xmm0 \n\t"        // xmm0 = [max(A,C), max(B,D), ...]
-            "shufps $0x55, %%xmm0, %%xmm1 \n\t" // Sposta il 2° float al 1° posto
-            "maxss %%xmm1, %%xmm0 \n\t"        // Max scalare finale
-
-            // 9. Salvataggio risultato
-            "movss %%xmm0, %[out] \n\t"
-
-            // Lista Operandi
-            : [out] "=m" (local_best), [j] "+r" (j)      // Output
-            : [row] "r" (current_index_row),             // Input Pointers
-              [dqp] "r" (dQP),
-              [h]   "r" (h),
-              [ptr_j] "r" ((long)j),                     // Offset castato a long per 64bit
-              [mask] "m" (*absMaskArr)                   // Maschera memoria
-            : "eax", "xmm0", "xmm1", "xmm2", "cc", "memory" // Clobber List
-        );
-
-        // Tail Loop: Gestisce gli ultimi elementi se h non è multiplo di 4
-        for (; j < h; j++) {
-            float val = fabsf(current_index_row[j] - dQP[j]);
-            if (val > local_best) local_best = val;
-        }
-        
+        local_best = trovaMassimof(current_index_row, dQP, h);
         best_lb = local_best;
 
-        // --- B. Pruning (Filtraggio Veloce) ---
-        // Confronto "gratis" usando il valore cachato d_k_max
         if (best_lb >= d_k_max)
             continue;
 
-        // --- C. Calcolo Distanza Reale (Approssimata) ---
         uint32_t* vPlus = &vPlus_all[i * num_blocchi_global];
         uint32_t* vMinus = &vMinus_all[i * num_blocchi_global];
 
         float d_q_v_approx = distApprossimata(vPlus, vMinus, qPlus, qMinus, num_blocchi_global);
 
-        // --- D. Inserimento e Aggiornamento Pigro ---
         if (d_q_v_approx < d_k_max)
         {
             insert_into_knn(KNN, k, i, d_q_v_approx);
-            
-            // OTTIMIZZAZIONE CRITICA:
-            // Ricalcoliamo d_k_max SOLO se abbiamo modificato KNN
             d_k_max = get_d_k_max(KNN, k);
         }
     }
