@@ -5,11 +5,11 @@ section .data
     neg_ones: dd -1.0, -1.0, -1.0, -1.0
 
 section .text
-    global get_d_k_max
+    global get_d_k_maxf
 
 ; float get_d_k_max(float* KNN, int k)
 ; RDI = KNN, ESI = k, ritorno in XMM0
-get_d_k_max:
+get_d_k_maxf:
     movaps xmm0, [rel neg_ones]     ; max = [-1, -1, -1, -1]
     
     test esi, esi

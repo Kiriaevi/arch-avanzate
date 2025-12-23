@@ -20,11 +20,17 @@ uint32_t *pMinus = NULL;
 int num_blocchi_global = 0;
 
 /* Ma che vuol dire che in C non c'è l'overloading della funzioni... -> https://en.cppreference.com/w/c/language/generic.html*/
+extern double trovaMassimod(double *current_index_row, double *dQP, int h);
+extern float trovaMassimof(float *current_index_row, float *dQP, int h);
+#define trovaMassimo(curr_index_row, dQP, h) _Generic((curr_index_row), float *: trovaMassimof, double *: trovaMassimod)(curr_index_row, dQP, h)
 extern int distApprossimata(uint32_t *vPlus, uint32_t *vMinus, uint32_t *wPlus, uint32_t *wMinus, int D);
 extern float dEuclideaf(float *v, float *w, int D);
 extern double dEuclidead(double *v, double *w, int D);
 #define dEuclidea(v, w, D) _Generic((v), float *: dEuclideaf, double *: dEuclidead)(v, w, D)
-extern float get_d_k_max(float *KNN, int k);
+extern float get_d_k_maxf(float *KNN, int k);
+extern double get_d_k_maxd(double *KNN, int k);
+#define get_d_k_max(KNN, k) _Generic((KNN), float *: get_d_k_maxf, double *: get_d_k_maxd)(KNN, k)
+
 
 /*GENERALIZZO IL PROGRAMMA PER FUNZIONARE SIA CON DOUBLE CHE CON FLOAT*/
 #define ABS(x) _Generic((x), float: fabsf, double: fabs)(x)
@@ -76,7 +82,7 @@ void insert_into_knn(VECTOR KNN, int k, int id, type distance)
   // Se la nuova distanza è minore del peggiore attuale, sostituisci
   if (distance < max_distance)
   {
-    KNN[max_index_id] = (type)id;
+    KNN[max_index_id] = id;
     KNN[max_index_id + 1] = distance;
   }
 }
@@ -104,7 +110,7 @@ VECTOR indexing(params *input)
     {
       uint32_t* pPlusC = &pPlus[c * num_blocchi_global];
       uint32_t* pMinusC = &pMinus[c * num_blocchi_global];
-      output[r * h + c] = (type)distApprossimata(vPlus, vMinus, pPlusC, pMinusC, num_blocchi_global);
+      output[r * h + c] = distApprossimata(vPlus, vMinus, pPlusC, pMinusC, num_blocchi_global);
     }
   }
   return output;
@@ -316,61 +322,38 @@ void preQuantizePivots(params *input)
 }
 
 // Processa un blocco di dataset [start_N, end_N) per una specifica query
-void process_block_for_query(int start_N, int end_N, VECTOR query, params *input, uint32_t *qPlus, uint32_t *qMinus, VECTOR dQP, VECTOR KNN)
+void process_block_for_query(int start_N, int end_N, VECTOR query, params *input, 
+                             uint32_t* qPlus, uint32_t* qMinus, VECTOR dQP, VECTOR KNN) 
 {
-  int D = input->D;
-  int h = input->h;
-  int k = input->k;
+    int D = input->D;
+    int h = input->h;
+    int k = input->k;
 
-  type d_k_max = get_d_k_max(KNN, k);
-  for (int i = start_N; i < end_N; i++)
-  {
-    type best_lb = 0.0;
-    int j;
+    type d_k_max = get_d_k_max(KNN, k);
 
-    VECTOR current_index_row = &input->index[i * h];
-
-    type local_best = best_lb;
-    for (j = 0; j <= h - 4; j += 4)
+    // Itera SOLO sul blocco corrente del dataset
+    for (int i = start_N; i < end_N; i++)
     {
-      type val0 = ABS(current_index_row[j] - dQP[j]);
-      type val1 = ABS(current_index_row[j + 1] - dQP[j + 1]);
-      type val2 = ABS(current_index_row[j + 2] - dQP[j + 2]);
-      type val3 = ABS(current_index_row[j + 3] - dQP[j + 3]);
+        type *current_index_row = &input->index[i * h];
+        type best_lb = 0.0;
+        int j = 0;
 
-      if (val0 > local_best)
-        local_best = val0;
-      if (val1 > local_best)
-        local_best = val1;
-      if (val2 > local_best)
-        local_best = val2;
-      if (val3 > local_best)
-        local_best = val3;
+        best_lb = trovaMassimo(current_index_row, dQP, h);
+
+        if (best_lb >= d_k_max)
+            continue;
+
+        uint32_t* vPlus = &vPlus_all[i * num_blocchi_global];
+        uint32_t* vMinus = &vMinus_all[i * num_blocchi_global];
+
+        type d_q_v_approx = distApprossimata(vPlus, vMinus, qPlus, qMinus, num_blocchi_global);
+
+        if (d_q_v_approx < d_k_max)
+        {
+            insert_into_knn(KNN, k, i, d_q_v_approx);
+            d_k_max = get_d_k_max(KNN, k);
+        }
     }
-    for (; j < h; j++)
-    {
-      type val = ABS(current_index_row[j] - dQP[j]);
-      if (val > local_best)
-        local_best = val;
-    }
-
-    best_lb = local_best;
-
-    if (best_lb >= d_k_max)
-      continue;
-
-    uint32_t *vPlus = &vPlus_all[i * num_blocchi_global];
-    uint32_t *vMinus = &vMinus_all[i * num_blocchi_global];
-
-    type d_q_v_approx = (type)distApprossimata(vPlus, vMinus, qPlus, qMinus, num_blocchi_global);
-
-    // D. Inserimento
-    if (d_q_v_approx < d_k_max)
-    {
-      insert_into_knn(KNN, k, i, d_q_v_approx);
-      d_k_max = get_d_k_max(KNN, k);
-    }
-  }
 }
 
 void fit(params *input)
