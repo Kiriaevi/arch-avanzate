@@ -131,9 +131,9 @@ static inline void heapify(VECTOR v, int *indices, int n, int i) {
         int left = 2 * i + 1;
         int right = 2 * i + 2;
 
-        if (left < n && ABS(v[indices[left]]) < ABS(v[indices[smallest]]))             
+        if (left < n && ABS(v[indices[left]]) < ABS(v[indices[smallest]]))
           smallest = left;
-        if (right < n && ABS(v[indices[right]]) < ABS(v[indices[smallest]]))             
+        if (right < n && ABS(v[indices[right]]) < ABS(v[indices[smallest]])) 
           smallest = right;
         if (smallest != i) {
             int temp = indices[i];
