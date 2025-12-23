@@ -1,83 +1,108 @@
 global trovaMassimod
 default rel
-section .data 
-  align 16
-  ; maschera per il valore assoluto vettoriale SSE
-  ; sarebbe 0111111111111111 1111111111111111 in binario
-  abs_mask: dq 0x7FFFFFFFFFFFFFFF, 0x7FFFFFFFFFFFFFFF
-;== trovaMassimod
-; ABS(current_index_row[j] - dQP[j]);
-; si implementa | curr_index_row[j] - dQP[j] | e aggiornamento massimo locale
-; double *current_index_row, double *dQP, int h
-; input: double *current_index_row, double *dQP, int h ( dimensione dei vettori )
-; output: double output, massimo valore assoluto trovato
-; current_index_row -> rdi; dQP -> rsi; h -> rdx
+
+section .data
+    align 32
+    ; Maschera per il valore assoluto dei double
+    ; 0x7FFF...FFF = bit di segno a 0, tutti gli altri a 1
+    ; Serve per calcolare |x| azzerando il bit di segno
+abs_mask_d:
+    dq 0x7FFFFFFFFFFFFFFF, 0x7FFFFFFFFFFFFFFF
+    dq 0x7FFFFFFFFFFFFFFF, 0x7FFFFFFFFFFFFFFF
+
 section .text
 trovaMassimod:
-    push    rbp
-    mov     rbp, rsp
-    push    rbx
-    push    r12
-    push    r13
+    mov edx, edx
 
-    xor     rax, rax          ; i = 0
-    xor     ebx, ebx          ; local_best = 0
+    push rbp
+    mov  rbp, rsp
+    push rbx
+    push r12
 
-    shl     rdx, 3            ; h in byte, limite per il ciclo resto
-    mov     r12, rdx          
-    shr     r12, 4            ; h / 16
-    shl     r12, 4            ; h / 16 in byte, limite per il loop vettorizzato
-    movaps  xmm5, [abs_mask]
-    xorps   xmm6, xmm6
-    xorps   xmm2, xmm2
+    ; rax usato come offset in byte all'interno dei vettori
+    xor  rax, rax          ; offset iniziale = 0
 
-loop_vettorizzato:
-    cmp     rax, r12
-    jge     fine_loop_vettorizzato
+    ; Converte h (numero di double) in numero di byte
+    shl  rdx, 3            
+    ; Calcolo del limite per il loop vettorizzato:
+    ; floor(total_bytes / 32) * 32
+    ; (32 byte = 4 double = 1 registro YMM)
+    mov  r12, rdx
+    shr  r12, 5
+    shl  r12, 5            ; r12 = limite vettoriale in byte
 
-    movupd  xmm0, [rdi + rax]      ; current_index_row
-    movupd  xmm1, [rsi + rax]      ; dQP
+    ; Carica la maschera per il valore assoluto
+    vmovapd ymm5, [abs_mask_d]
 
-    ; Calcolo current_index_row - dQP
-    subpd   xmm0, xmm1             
+    ; Inizializza il vettore dei massimi locali a 0.0
+    vxorpd  ymm6, ymm6, ymm6
 
-    ; Calcolo il valore assoluto usando la maschera
-    andpd   xmm0, xmm5             ; | curr_index_row - dQP |   
-    maxpd   xmm6, xmm0
+.loop_vec:
+    cmp  rax, r12
+    jge  .end_vec          ; esce se abbiamo processato tutti i blocchi AVX
 
-    add     rax, 16                
-    jmp     loop_vettorizzato
-fine_loop_vettorizzato: 
-    ; Riduzione del massimo vettoriale a scalare
-    movapd  xmm0, xmm6
-    shufpd  xmm0, xmm0, 1
-    maxpd   xmm6, xmm0            
+    ; Carica 4 double da current_index_row e dQP
+    vmovupd ymm0, [rdi + rax]
+    vmovupd ymm1, [rsi + rax]
 
-    movapd  xmm2, xmm6
-    jmp     loop_resto
+    ; Calcolo differenza: current_index_row - dQP
+    vsubpd  ymm0, ymm0, ymm1
 
+    ; Calcolo valore assoluto: |diff|
+    vandpd  ymm0, ymm0, ymm5
 
+    ; Aggiornamento massimo vettoriale
+    vmaxpd  ymm6, ymm6, ymm0
 
-loop_resto:
+    ; Avanza di 4 double (32 byte)
+    add  rax, 32
+    jmp  .loop_vec
 
-    cmp     rax, rdx
-    jge     fine
+.end_vec:
+    ; Estrae la metà alta del registro YMM (elementi 2 e 3)
+    vextractf128 xmm0, ymm6, 1
 
-    movsd   xmm0, [rdi + rax]      ; current_index_row
-    movsd   xmm1, [rsi + rax]      ; dQP
+    ; Confronta metà bassa (d0,d1) con metà alta (d2,d3)
+    vmaxpd       xmm6, xmm6, xmm0
 
-    subsd   xmm0, xmm1             
+    ; Ora in xmm6 ci sono due double:
+    ; xmm6[0] = max(d0, d2)
+    ; xmm6[1] = max(d1, d3)
 
-    andpd   xmm0, xmm5             ; | curr_index_row - dQP |   
-    maxsd   xmm2, xmm0
-    add     rax, 8                 
-    jmp     loop_resto
+    ; Shuffle per confrontare i due double rimasti
+    vshufpd  xmm0, xmm6, xmm6, 1
+    vmaxsd   xmm2, xmm6, xmm0
+    ; xmm2 contiene il massimo dei 4 valori AVX
 
-fine:
-    pop     r13      
-    pop     r12
-    pop     rbx
-    pop     rbp      
-    movapd  xmm0, xmm2
-    ret              
+.loop_tail:
+    cmp  rax, rdx
+    jge  .done             ; termina se non restano elementi
 
+    ; Carica un double da ciascun vettore
+    vmovsd xmm0, [rdi + rax]
+    vmovsd xmm1, [rsi + rax]
+
+    ; Differenza scalare
+    vsubsd xmm0, xmm0, xmm1
+
+    ; Valore assoluto scalare
+    vandpd xmm0, xmm0, [abs_mask_d]
+
+    ; Aggiorna massimo scalare
+    vmaxsd xmm2, xmm2, xmm0
+
+    ; Avanza di 1 double (8 byte)
+    add  rax, 8
+    jmp  .loop_tail
+
+.done:
+    ; Ritorna il risultato in xmm0
+    vmovapd xmm0, xmm2
+
+    ; Evita penalty AVX → SSE nel codice chiamante
+    vzeroupper
+
+    pop  r12
+    pop  rbx
+    pop  rbp
+    ret

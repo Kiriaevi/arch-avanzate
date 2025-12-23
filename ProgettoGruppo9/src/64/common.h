@@ -1,8 +1,8 @@
 #ifndef QUANTPIVOT_COMMON
 #define QUANTPIVOT_COMMON
 
-#define	type	float
-#define	align	16
+#define	type	double
+#define	align	32
 
 #define	MATRIX		type*
 #define	VECTOR		type*

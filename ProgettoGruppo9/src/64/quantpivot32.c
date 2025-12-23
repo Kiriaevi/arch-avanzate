@@ -264,7 +264,7 @@ void preQuantizeDataset(params *input)
     VECTOR v = &input->DS[i * D];                       // Vettore corrente del dataset
     uint32_t *vp = &vPlus_all[i * num_blocchi_global];  // Vettore vPlus da quantizzare, preso dalla matrice globale
     uint32_t *vm = &vMinus_all[i * num_blocchi_global]; // Vettore vMinus da quantizzare, preso dalla matrice globale
-    quantizing(v, vm, vp, input, idx_buff);
+    quantizing(v, vp, vm, input, idx_buff);
   }
 
   free(idx_buff);
@@ -308,7 +308,7 @@ void preQuantizePivots(params *input)
     }
     VECTOR p = &input->DS[pivot_idx * D];
 
-    quantizing(p, pM, pP, input, idx_buff);
+    quantizing(p, pP, pM, input, idx_buff);
   }
   free(idx_buff);
 }
@@ -444,7 +444,7 @@ void predict(params *input)
     }
 
     // Quantizza query
-    quantizing(query, qMinus, qPlus, input, idx_buff);
+    quantizing(query, qPlus, qMinus, input, idx_buff);
 
     // Precalcola distanze query-pivot
     for (int j = 0; j < h; j++) {
