@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include <xmmintrin.h>
@@ -6,6 +7,8 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <stdbool.h>
+
 
 const int INDEXING_PROCEDURE_ERROR = -1;
 const int BLOCK_SIZE = 512;
@@ -20,15 +23,17 @@ uint32_t *pMinus = NULL;
 int num_blocchi_global = 0;
 
 /* Ma che vuol dire che in C non c'è l'overloading della funzioni... -> https://en.cppreference.com/w/c/language/generic.html*/
+extern double trovaMassimod(double *current_index_row, double *dQP, int h);
 extern float trovaMassimof(float *current_index_row, float *dQP, int h);
+#define trovaMassimo(curr_index_row, dQP, h) _Generic((curr_index_row), float *: trovaMassimof, double *: trovaMassimod)(curr_index_row, dQP, h)
 extern int distApprossimata(uint32_t *vPlus, uint32_t *vMinus, uint32_t *wPlus, uint32_t *wMinus, int D);
-extern float prodScalaref(float *v, float *w, int D);
-extern double prodScalared(double *v, double *w, int D);
-#define prodScalare(v, w, D) _Generic((v), float *: prodScalaref, double *: prodScalared)(v, w, D)
 extern float dEuclideaf(float *v, float *w, int D);
 extern double dEuclidead(double *v, double *w, int D);
 #define dEuclidea(v, w, D) _Generic((v), float *: dEuclideaf, double *: dEuclidead)(v, w, D)
-extern float get_d_k_max(float *KNN, int k);
+extern float get_d_k_maxf(float *KNN, int k);
+extern double get_d_k_maxd(double *KNN, int k);
+#define get_d_k_max(KNN, k) _Generic((KNN), float *: get_d_k_maxf, double *: get_d_k_maxd)(KNN, k)
+
 
 /*GENERALIZZO IL PROGRAMMA PER FUNZIONARE SIA CON DOUBLE CHE CON FLOAT*/
 #define ABS(x) _Generic((x), float: fabsf, double: fabs)(x)
@@ -80,7 +85,7 @@ void insert_into_knn(VECTOR KNN, int k, int id, type distance)
   // Se la nuova distanza è minore del peggiore attuale, sostituisci
   if (distance < max_distance)
   {
-    KNN[max_index_id] = (type)id;
+    KNN[max_index_id] = id;
     KNN[max_index_id + 1] = distance;
   }
 }
@@ -108,76 +113,108 @@ VECTOR indexing(params *input)
     {
       uint32_t* pPlusC = &pPlus[c * num_blocchi_global];
       uint32_t* pMinusC = &pMinus[c * num_blocchi_global];
-      output[r * h + c] = (type)distApprossimata(vPlus, vMinus, pPlusC, pMinusC, num_blocchi_global);
+      output[r * h + c] = distApprossimata(vPlus, vMinus, pPlusC, pMinusC, num_blocchi_global);
     }
   }
   return output;
 }
 
-// Funzione di quantizzazione (versione HEAD)
-void quantizing(VECTOR v, uint32_t *vMinus, uint32_t *vPlus, params *input, int *array_indici)
-{
-  int D = input->D;
-  int x = input->x;
+/*
+   Stabilisco chi tra i due figli è il minimo.
+   Se effettivamente esiste qualcuno di più 
+   piccolo allora faccio uno swap, altrimenti
+   fermo il ciclo.
+   Gli elementi "in cima" sono i più piccoli.
+*/
+static inline void heapify(VECTOR v, int *indices, int n, int i) {
+    while (true) {
+        int smallest = i;
+        int left = 2 * i + 1;
+        int right = 2 * i + 2;
 
-  // 1. Reset
-  for (int b = 0; b < num_blocchi_global; b++)
-  {
-    vPlus[b] = 0;
-    vMinus[b] = 0;
-  }
+        if (left < n && ABS(v[indices[left]]) < ABS(v[indices[smallest]]))             
+          smallest = left;
+        if (right < n && ABS(v[indices[right]]) < ABS(v[indices[smallest]]))             
+          smallest = right;
+        if (smallest != i) {
+            int temp = indices[i];
+            indices[i] = indices[smallest];
+            indices[smallest] = temp;
 
-  for (int k = 0; k < D; k++)
-  {
-    array_indici[k] = k;
-  }
-
-  // 2. Cerco gli X elementi con valore assoluto massimo (Partial Selection Sort)
-  for (int i = 0; i < x; i++)
-  {
-    int maxIndex = i;
-    type maxVal = ABS(v[array_indici[i]]);
-
-    for (int j = i + 1; j < D; j++)
-    {
-      type currentVal = ABS(v[array_indici[j]]);
-
-      if (currentVal > maxVal)
-      {
-        maxVal = currentVal;
-        maxIndex = j;
-      }
+            i = smallest;
+        } else {
+            break;
+        }
     }
-
-    // Scambio solo gli indici
-    int temp = array_indici[i];
-    array_indici[i] = array_indici[maxIndex];
-    array_indici[maxIndex] = temp;
-  }
-
-  // 3. Assegnazione ai vettori vPlus e vMinus
-  for (int i = 0; i < x; i++)
-  {
-    int original_idx = array_indici[i];
-
-    int bucket = original_idx / 32;
-    int esponente_locale = original_idx % 32;
-
-    uint32_t valore_posizionale = (uint32_t)pow(2, esponente_locale);
-
-    if (v[original_idx] >= 0)
-    {
-      vPlus[bucket] += valore_posizionale;
-    }
-    else
-    {
-      vMinus[bucket] += valore_posizionale;
-    }
-  }
 }
 
-// Selezione Pivot
-// FIXME: qui ho un dubbio, devo mettere VECTOR al dataset o MATRIX?
+void quantizing(VECTOR v, uint32_t *vPlus, uint32_t *vMinus, params *input, int *array_indici)
+{
+    int D = input->D;
+    int x = input->x;
+    for (int b = 0; b < num_blocchi_global; b++) {
+        vPlus[b] = 0;
+        vMinus[b] = 0;
+    }
+
+    for (int k = 0; k < D; k++) {
+        array_indici[k] = k;
+    }
+
+    // uso HEAP SELECTION se x non è troppo grande rispetto a D
+    int initHeapSize = ((x-1)-1) / 2;
+    for (int i = initHeapSize; i >= 0; i--) {
+      heapify(v, array_indici, x, i);
+    }
+    for (int i = x; i < D; i++)             
+      /* Siccome alla fine siamo interessati ai valori massimi in valore assoluto,
+       * quando troviamo qualcuno di più grande lo scambiamo con la radice dell'heap
+       * e se necessario lo spostiamo in fondo all'heap (solo i più piccoli valori stanno in cima)
+       */
+      if (ABS(v[array_indici[i]]) > ABS(v[array_indici[0]])) {
+        int temp = array_indici[0];
+        array_indici[0] = array_indici[i];
+        array_indici[i] = temp;
+        heapify(v, array_indici, x, 0);
+      }
+    /*
+        // per ora lascio il partial sort
+    for (int i = 0; i < x; i++) {
+      int maxIndex = i;
+      double maxVal = ABS(v[array_indici[i]]); 
+      for (int j = i + 1; j < D; j++) {
+        double currentVal = ABS(v[array_indici[j]]);
+        if (currentVal > maxVal) {
+          maxVal = currentVal;
+          maxIndex = j;
+        }
+      }
+      // Scambio solo gli indici
+      int temp = array_indici[i];
+      array_indici[i] = array_indici[maxIndex];
+      array_indici[maxIndex] = temp;
+    }
+    */
+
+    // Assegnazione ai vettori vPlus e vMinus
+    for (int i = 0; i < x; i++)
+    {
+        int original_idx = array_indici[i];
+
+        // Divisione intera e modulo per individuare il blocco e il bit
+        int bucket = original_idx / 32;          
+        int esponente_locale = original_idx % 32; 
+
+        uint32_t valore_posizionale = (uint32_t)pow(2, esponente_locale);
+
+        if (v[original_idx] >= 0) {
+            vPlus[bucket] += valore_posizionale;
+        } else {
+            vMinus[bucket] += valore_posizionale;
+        }
+    }
+}
+
 int *calcoloPivot(VECTOR dataSet, int h, int N, int D)
 {
   printf("INIZIO CALCOLO PIVOT\n");
@@ -277,25 +314,23 @@ void preQuantizePivots(params *input)
 }
 
 // Processa un blocco di dataset [start_N, end_N) per una specifica query
-void process_block_for_query(int start_N, int end_N, float* query, params *input, 
-                             uint32_t* qPlus, uint32_t* qMinus, float* dQP, float* KNN) 
+void process_block_for_query(int start_N, int end_N, VECTOR query, params *input, 
+                             uint32_t* qPlus, uint32_t* qMinus, VECTOR dQP, VECTOR KNN) 
 {
     int D = input->D;
     int h = input->h;
     int k = input->k;
 
-    float d_k_max = get_d_k_max(KNN, k);
+    type d_k_max = get_d_k_max(KNN, k);
 
     // Itera SOLO sul blocco corrente del dataset
     for (int i = start_N; i < end_N; i++)
     {
-        float *current_index_row = &input->index[i * h];
-        float best_lb = 0.0f;
-        float local_best = 0.0f;
+        type *current_index_row = &input->index[i * h];
+        type best_lb = 0.0;
         int j = 0;
 
-        local_best = trovaMassimof(current_index_row, dQP, h);
-        best_lb = local_best;
+        best_lb = trovaMassimo(current_index_row, dQP, h);
 
         if (best_lb >= d_k_max)
             continue;
@@ -303,7 +338,7 @@ void process_block_for_query(int start_N, int end_N, float* query, params *input
         uint32_t* vPlus = &vPlus_all[i * num_blocchi_global];
         uint32_t* vMinus = &vMinus_all[i * num_blocchi_global];
 
-        float d_q_v_approx = distApprossimata(vPlus, vMinus, qPlus, qMinus, num_blocchi_global);
+        type d_q_v_approx = distApprossimata(vPlus, vMinus, qPlus, qMinus, num_blocchi_global);
 
         if (d_q_v_approx < d_k_max)
         {
