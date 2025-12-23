@@ -1,0 +1,41 @@
+N = 40000, D = 2000, h = 16, x = 64, k = 8
+DOUBLE
+<== PRIMA 
+FIT time = 13.92915 secs
+13.929
+PREDICT time = 178.33358 secs
+178.334
+==== BLOCK_SIZE = 1024
+FIT time = 12.89836 secs
+12.898
+FIT time = 132.53595 secs
+132.536
+===> DOPO
+
+N = 40000, D = 2000, h = 16, x = 64, k = 8
+FLOAT
+<== PRIMA 
+FIT time = 12.85458 secs
+12.855
+FIT time = 201.90248 secs
+201.902
+==== BLOCK_SIZE = 1024, anche 512
+FIT time = 11.31853 secs
+11.319
+PREDICT time = 136.26374 secs
+136.264
+===> DOPO
+
+N = 40000, D = 2000, h = 16, x = 64, k = 8
+FLOAT
+<== PRIMA 
+FIT time = 11.40843 secs
+11.408
+FIT time = 184.68080 secs
+184.681
+==== BLOCK_SIZE = 512
+FIT time = 11.25816 secs
+11.258
+FIT time = 123.81885 secs
+123.819
+===> DOPO
