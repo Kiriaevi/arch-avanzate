@@ -2,8 +2,9 @@ global trovaMassimof
 default rel
 section .data 
   align 16
-  abs_mask: dd 0x7FFFFFFF, 0x7FFFFFFF, 0x7FFFFFFF, 0x7FFFFFFF ; maschera per il valore assoluto vettoriale SSE
-
+  ; maschera per il valore assoluto vettoriale SSE
+  ; sarebbe 01111111 11111111 11111111 11111111 in binario
+  abs_mask: dd 0x7FFFFFFF, 0x7FFFFFFF, 0x7FFFFFFF, 0x7FFFFFFF 
 ;== trovaMassimof
 ; ABS(current_index_row[j] - dQP[j]);
 ; si implementa | curr_index_row[j] - dQP[j] | e aggiornamento massimo locale
@@ -47,13 +48,14 @@ loop_vettorizzato:
     add     rax, 16                
     jmp     loop_vettorizzato
 fine_loop_vettorizzato: 
+    ; Riduzione del massimo vettoriale a scalare
     movaps  xmm0, xmm6
-    shufps  xmm0, xmm0, 0xB1      ; Shuffle
-    maxps   xmm6, xmm0            ; Round 1
+    shufps  xmm0, xmm0, 10110001b      
+    maxps   xmm6, xmm0            
 
     movaps  xmm0, xmm6
-    shufps  xmm0, xmm0, 0x4E      ; Shuffle
-    maxps   xmm6, xmm0            ; Round 2
+    shufps  xmm0, xmm0, 01001110b      
+    maxps   xmm6, xmm0            
 
     movaps  xmm2, xmm6
     jmp     loop_resto
