@@ -14,10 +14,10 @@ distApprossimata:
     mov     rbp, rsp
     push    rbx             
 
-    shl     r8, 2           ; n in byte, lo uso per il ciclo resto
+    shl     r8, 3           ; n in byte, lo uso per il ciclo resto
     mov     r10, r8            
-    shr     r10, 4          ; n/16 
-    shl     r10, 4          ; n/16 * 16, lo uso come limite per il loop vettorizzato
+    shr     r10, 5          ; n/32 
+    shl     r10, 5          ; n/32 * 32, lo uso come limite per il loop vettorizzato
     
     xor     r9, r9          ; i = 0
     xor     r11, r11        
@@ -27,14 +27,14 @@ loop_vettorizzato:
     jge     loop_resto
     
     ; Carico 4 elementi da ogni vettore e faccio delle copie per evitare la sovrascrittura
-    movups  xmm0, [rdi + r9]      ; vPlus 
-    movups  xmm1, [rsi + r9]      ; vMinus
-    movups  xmm2, [rdx + r9]      ; wPlus
-    movups  xmm3, [rcx + r9]      ; wMinus 
+    vmovups  ymm0, [rdi + r9]      ; vPlus 
+    vmovups  ymm1, [rsi + r9]      ; vMinus
+    vmovups  ymm2, [rdx + r9]      ; wPlus
+    vmovups  ymm3, [rcx + r9]      ; wMinus 
 
     ; -- 1. (v+ ◦ w+) -> Somma --
-    movaps  xmm4, xmm0            ; copia vPlus
-    pand    xmm4, xmm2            ; vPlus ◦ wPlus
+    vmovaps  xmm4, xmm0            ; copia vPlus
+    vpand    xmm4, xmm2            ; vPlus ◦ wPlus
     
     movq    rax,  xmm4
     movhlps xmm4, xmm4
