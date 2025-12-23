@@ -19,7 +19,9 @@ uint32_t *pMinus = NULL;
 int num_blocchi_global = 0;
 
 /* Ma che vuol dire che in C non c'è l'overloading della funzioni... -> https://en.cppreference.com/w/c/language/generic.html*/
+extern double trovaMassimod(double *current_index_row, double *dQP, int h);
 extern float trovaMassimof(float *current_index_row, float *dQP, int h);
+#define trovaMassimo(curr_index_row, dQP, h) _Generic((curr_index_row), float *: trovaMassimof, double *: trovaMassimod)(curr_index_row, dQP, h)
 extern int distApprossimata(uint32_t *vPlus, uint32_t *vMinus, uint32_t *wPlus, uint32_t *wMinus, int D);
 extern float dEuclideaf(float *v, float *w, int D);
 extern double dEuclidead(double *v, double *w, int D);
@@ -286,12 +288,10 @@ void process_block_for_query(int start_N, int end_N, float* query, params *input
     for (int i = start_N; i < end_N; i++)
     {
         float *current_index_row = &input->index[i * h];
-        float best_lb = 0.0f;
-        float local_best = 0.0f;
+        type best_lb = 0.0;
         int j = 0;
 
-        local_best = trovaMassimof(current_index_row, dQP, h);
-        best_lb = local_best;
+        best_lb = trovaMassimo(current_index_row, dQP, h);
 
         if (best_lb >= d_k_max)
             continue;
