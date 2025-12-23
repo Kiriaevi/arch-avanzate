@@ -117,6 +117,7 @@ loop_resto:
     jmp     loop_resto
 
 fine: 
+    xor     rax, rax
     mov     rax, r11       
     pop     rbx             
     pop     rbp
