@@ -7,6 +7,8 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <stdbool.h>
+
 
 const int INDEXING_PROCEDURE_ERROR = -1;
 const int BLOCK_SIZE = 512;
@@ -116,25 +118,32 @@ VECTOR indexing(params *input)
   return output;
 }
 
-void heapify_indices(VECTOR v, int *indices, int n, int i) {
-    int smallest = i;
-    int left = 2 * i + 1;
-    int right = 2 * i + 2;
+/*
+   Stabilisco chi tra i due figli è il minimo.
+   Se effettivamente esiste qualcuno di più 
+   piccolo allora faccio uno swap, altrimenti
+   fermo il ciclo.
+   Gli elementi "in cima" sono i più piccoli.
+*/
+static inline void heapify(VECTOR v, int *indices, int n, int i) {
+    while (true) {
+        int smallest = i;
+        int left = 2 * i + 1;
+        int right = 2 * i + 2;
 
-    // Confrontiamo i valori assoluti riferiti dagli indici
-    if (left < n && ABS(v[indices[left]]) < ABS(v[indices[smallest]]))
-        smallest = left;
+        if (left < n && ABS(v[indices[left]]) < ABS(v[indices[smallest]]))             
+          smallest = left;
+        if (right < n && ABS(v[indices[right]]) < ABS(v[indices[smallest]]))             
+          smallest = right;
+        if (smallest != i) {
+            int temp = indices[i];
+            indices[i] = indices[smallest];
+            indices[smallest] = temp;
 
-    if (right < n && ABS(v[indices[right]]) < ABS(v[indices[smallest]]))
-        smallest = right;
-
-    if (smallest != i) {
-        // Scambia gli indici
-        int temp = indices[i];
-        indices[i] = indices[smallest];
-        indices[smallest] = temp;
-
-        heapify_indices(v, indices, n, smallest);
+            i = smallest;
+        } else {
+            break;
+        }
     }
 }
 
@@ -142,76 +151,60 @@ void quantizing(VECTOR v, uint32_t *vPlus, uint32_t *vMinus, params *input, int 
 {
     int D = input->D;
     int x = input->x;
-
-    // 1. Reset
     for (int b = 0; b < num_blocchi_global; b++) {
         vPlus[b] = 0;
         vMinus[b] = 0;
     }
 
-    // Inizializzo array indici 0..D-1
     for (int k = 0; k < D; k++) {
         array_indici[k] = k;
     }
 
-    // 2. Cerco gli X elementi con valore assoluto massimo
-    // Usiamo D/4 come soglia, come da tua logica
-    if (x <= D / 4) {
-        // --- HEAP SELECTION (Min-Heap sugli indici) ---
-        
-        // A. Costruiamo un Min-Heap sui primi 'x' indici
-        // Iniziamo dall'ultimo nodo non-foglia
-        for (int i = x / 2 - 1; i >= 0; i--) {
-            heapify_indices(v, array_indici, x, i);
-        }
-
-        // B. Iteriamo sul resto dell'array
-        for (int i = x; i < D; i++) {
-            // Se l'elemento corrente è più grande del MINIMO dei top-x attuali (che è alla radice indices[0])
-            if (ABS(v[array_indici[i]]) > ABS(v[array_indici[0]])) {
-                // Scambiamo: quello che era fuori entra nel heap, quello che era il minimo esce
-                int temp = array_indici[0];
-                array_indici[0] = array_indici[i];
-                array_indici[i] = temp;
-
-                // Ripristiniamo la proprietà del Min-Heap sulla radice
-                heapify_indices(v, array_indici, x, 0);
-            }
-        }
-        // Alla fine, array_indici[0...x-1] contiene gli indici dei Top X elementi (non ordinati tra loro, ma non serve)
-        
-    } else {
-        // --- PARTIAL SELECTION SORT (Il tuo ramo 'else' funzionante) ---
-        for (int i = 0; i < x; i++) {
-            int maxIndex = i;
-            // Nota: qui usiamo un float/double type per il confronto, non int
-            double maxVal = ABS(v[array_indici[i]]); 
-
-            for (int j = i + 1; j < D; j++) {
-                double currentVal = ABS(v[array_indici[j]]);
-                if (currentVal > maxVal) {
-                    maxVal = currentVal;
-                    maxIndex = j;
-                }
-            }
-            // Scambio solo gli indici
-            int temp = array_indici[i];
-            array_indici[i] = array_indici[maxIndex];
-            array_indici[maxIndex] = temp;
-        }
+    // uso HEAP SELECTION se x non è troppo grande rispetto a D
+    int initHeapSize = ((x-1)-1) / 2;
+    for (int i = initHeapSize; i >= 0; i--) {
+      heapify(v, array_indici, x, i);
     }
+    for (int i = x; i < D; i++)             
+      /* Siccome alla fine siamo interessati ai valori massimi in valore assoluto,
+       * quando troviamo qualcuno di più grande lo scambiamo con la radice dell'heap
+       * e se necessario lo spostiamo in fondo all'heap (solo i più piccoli valori stanno in cima)
+       */
+      if (ABS(v[array_indici[i]]) > ABS(v[array_indici[0]])) {
+        int temp = array_indici[0];
+        array_indici[0] = array_indici[i];
+        array_indici[i] = temp;
+        heapify(v, array_indici, x, 0);
+      }
+    /*
+        // per ora lascio il partial sort
+    for (int i = 0; i < x; i++) {
+      int maxIndex = i;
+      double maxVal = ABS(v[array_indici[i]]); 
+      for (int j = i + 1; j < D; j++) {
+        double currentVal = ABS(v[array_indici[j]]);
+        if (currentVal > maxVal) {
+          maxVal = currentVal;
+          maxIndex = j;
+        }
+      }
+      // Scambio solo gli indici
+      int temp = array_indici[i];
+      array_indici[i] = array_indici[maxIndex];
+      array_indici[maxIndex] = temp;
+    }
+    */
 
-    // 3. Assegnazione ai vettori vPlus e vMinus
+    // Assegnazione ai vettori vPlus e vMinus
     for (int i = 0; i < x; i++)
     {
         int original_idx = array_indici[i];
 
         // Divisione intera e modulo per individuare il blocco e il bit
-        int bucket = original_idx / 32;          // Equivale a original_idx >> 5
-        int esponente_locale = original_idx % 32; // Equivale a original_idx & 31
+        int bucket = original_idx / 32;          
+        int esponente_locale = original_idx % 32; 
 
-        // CORREZIONE IMPORTANTE: Usa bit shift invece di pow()
-        uint32_t valore_posizionale = (uint32_t)1 << esponente_locale;
+        uint32_t valore_posizionale = (uint32_t)pow(2, esponente_locale);
 
         if (v[original_idx] >= 0) {
             vPlus[bucket] += valore_posizionale;
@@ -221,8 +214,6 @@ void quantizing(VECTOR v, uint32_t *vPlus, uint32_t *vMinus, params *input, int 
     }
 }
 
-// Selezione Pivot
-// FIXME: qui ho un dubbio, devo mettere VECTOR al dataset o MATRIX?
 int *calcoloPivot(VECTOR dataSet, int h, int N, int D)
 {
   printf("INIZIO CALCOLO PIVOT\n");
