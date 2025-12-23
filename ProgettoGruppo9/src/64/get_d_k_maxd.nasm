@@ -2,57 +2,59 @@ bits 64
 default rel
 
 section .data
-    align 16
-    neg_ones: dq -1.0, -1.0
+    align 32
+    neg_ones: dq -1.0, -1.0, -1.0, -1.0
 
 section .text
     global get_d_k_maxd
 
 get_d_k_maxd:
-    movapd xmm0, [neg_ones]
+    vmovapd ymm0, [neg_ones]
     
     test esi, esi
-    jle .reduce
+    jle .red
     
     mov edx, esi
-    shr edx, 1
-    shl edx, 1
-    jz .remainder
+    shr edx, 2          
+    shl edx, 2          
+    jz .resto
     
     xor ecx, ecx
-    
-.loop_vec:
+
+.loop_vett:
     mov rax, rcx
-    shl rax, 4
+    shl rax, 4          
     
-    movupd xmm1, [rdi + rax]
-    movupd xmm2, [rdi + rax + 16]
+    vmovupd ymm1, [rdi + rax]       
+    vmovupd ymm2, [rdi + rax + 32]  
     
-    shufpd xmm1, xmm2, 3
-    maxpd xmm0, xmm1
+    vshufpd ymm1, ymm1, ymm2, 0b1111
+    vmaxpd ymm0, ymm0, ymm1
     
-    add ecx, 2
+    add ecx, 4
     cmp ecx, edx
-    jl .loop_vec
-    
-.remainder:
+    jl .loop_vett
+
+.resto:
     cmp ecx, esi
-    jge .reduce
-    
-.loop_scalar:
+    jge .red
+
+.loop_resto:
     mov rax, rcx
     shl rax, 4
     
-    movsd xmm1, [rdi + rax + 8]
-    maxsd xmm0, xmm1
+    vmovsd xmm1, [rdi + rax + 8]
+    vmaxsd xmm0, xmm0, xmm1
     
     inc ecx
     cmp ecx, esi
-    jl .loop_scalar
-    
-.reduce:
-    movapd xmm1, xmm0
-    unpckhpd xmm1, xmm1
-    maxsd xmm0, xmm1
+    jl .loop_resto
+
+
+.red:
+    vextractf128 xmm1, ymm0, 1     
+    vmaxpd xmm0, xmm0, xmm1         
+    vunpckhpd xmm1, xmm0, xmm0      
+    vmaxsd xmm0, xmm0, xmm1         
     
     ret
