@@ -26,7 +26,10 @@ extern int distApprossimata(uint32_t *vPlus, uint32_t *vMinus, uint32_t *wPlus, 
 extern float dEuclideaf(float *v, float *w, int D);
 extern double dEuclidead(double *v, double *w, int D);
 #define dEuclidea(v, w, D) _Generic((v), float *: dEuclideaf, double *: dEuclidead)(v, w, D)
-extern float get_d_k_max(float *KNN, int k);
+extern float get_d_k_maxf(float *KNN, int k);
+extern double get_d_k_maxd(double *KNN, int k);
+#define get_d_k_max(KNN, k) _Generic((KNN), float *: get_d_k_maxf, double *: get_d_k_maxd)(KNN, k)
+
 
 /*GENERALIZZO IL PROGRAMMA PER FUNZIONARE SIA CON DOUBLE CHE CON FLOAT*/
 #define ABS(x) _Generic((x), float: fabsf, double: fabs)(x)
@@ -78,7 +81,7 @@ void insert_into_knn(VECTOR KNN, int k, int id, type distance)
   // Se la nuova distanza è minore del peggiore attuale, sostituisci
   if (distance < max_distance)
   {
-    KNN[max_index_id] = (type)id;
+    KNN[max_index_id] = id;
     KNN[max_index_id + 1] = distance;
   }
 }
@@ -106,7 +109,7 @@ VECTOR indexing(params *input)
     {
       uint32_t* pPlusC = &pPlus[c * num_blocchi_global];
       uint32_t* pMinusC = &pMinus[c * num_blocchi_global];
-      output[r * h + c] = (type)distApprossimata(vPlus, vMinus, pPlusC, pMinusC, num_blocchi_global);
+      output[r * h + c] = distApprossimata(vPlus, vMinus, pPlusC, pMinusC, num_blocchi_global);
     }
   }
   return output;
@@ -275,19 +278,19 @@ void preQuantizePivots(params *input)
 }
 
 // Processa un blocco di dataset [start_N, end_N) per una specifica query
-void process_block_for_query(int start_N, int end_N, float* query, params *input, 
-                             uint32_t* qPlus, uint32_t* qMinus, float* dQP, float* KNN) 
+void process_block_for_query(int start_N, int end_N, VECTOR query, params *input, 
+                             uint32_t* qPlus, uint32_t* qMinus, VECTOR dQP, VECTOR KNN) 
 {
     int D = input->D;
     int h = input->h;
     int k = input->k;
 
-    float d_k_max = get_d_k_max(KNN, k);
+    type d_k_max = get_d_k_max(KNN, k);
 
     // Itera SOLO sul blocco corrente del dataset
     for (int i = start_N; i < end_N; i++)
     {
-        float *current_index_row = &input->index[i * h];
+        type *current_index_row = &input->index[i * h];
         type best_lb = 0.0;
         int j = 0;
 
@@ -299,7 +302,7 @@ void process_block_for_query(int start_N, int end_N, float* query, params *input
         uint32_t* vPlus = &vPlus_all[i * num_blocchi_global];
         uint32_t* vMinus = &vMinus_all[i * num_blocchi_global];
 
-        float d_q_v_approx = distApprossimata(vPlus, vMinus, qPlus, qMinus, num_blocchi_global);
+        type d_q_v_approx = distApprossimata(vPlus, vMinus, qPlus, qMinus, num_blocchi_global);
 
         if (d_q_v_approx < d_k_max)
         {
