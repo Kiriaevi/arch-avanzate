@@ -160,7 +160,8 @@ void quantizing(VECTOR v, uint32_t *vPlus, uint32_t *vMinus, params *input, int 
         array_indici[k] = k;
     }
 
-    // uso HEAP SELECTION se x non è troppo grande rispetto a D
+    // uso un min HEAP per trovare i primi x massimi
+    // https://neetcode.io/solutions/top-k-frequent-elements#2-min-heap
     int initHeapSize = ((x-1)-1) / 2;
     for (int i = initHeapSize; i >= 0; i--) {
       heapify(v, array_indici, x, i);
