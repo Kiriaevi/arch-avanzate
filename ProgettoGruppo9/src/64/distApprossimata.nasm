@@ -27,10 +27,10 @@ loop_vettorizzato:
     jge     loop_resto
     
     ; Carico 4 elementi da ogni vettore e faccio delle copie per evitare la sovrascrittura
-    vmovups  ymm0, [rdi + r9]      ; vPlus 
-    vmovups  ymm1, [rsi + r9]      ; vMinus
-    vmovups  ymm2, [rdx + r9]      ; wPlus
-    vmovups  ymm3, [rcx + r9]      ; wMinus 
+    vmovupd  ymm0, [rdi + r9]      ; vPlus 
+    vmovupd  ymm1, [rsi + r9]      ; vMinus
+    vmovupd  ymm2, [rdx + r9]      ; wPlus
+    vmovupd  ymm3, [rcx + r9]      ; wMinus 
 
     ; -- 1. (v+ ◦ w+) -> Somma --
     vmovaps  xmm4, xmm0            ; copia vPlus
