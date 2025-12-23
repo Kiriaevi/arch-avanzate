@@ -6,10 +6,17 @@
 #include <time.h>
 #include <xmmintrin.h>
 
-//#define datasetFileName "dataset_2000x256_32.ds2"
-//#define queryFileName "query_2000x256_32.ds2"
-#define datasetFileName "generated_dataset.ds2"
-#define queryFileName "generated_queries.ds2"
+// =======32 BIT PROFESSORE=======  
+#define datasetFileName "dataset_2000x256_32.ds2"
+#define queryFileName "query_2000x256_32.ds2"
+
+// =======64 BIT PROFESSORE=======  
+//#define datasetFileName "dataset_2000x256_64.ds2"
+//#define queryFileName "query_2000x256_64.ds2"
+
+// =======DATASET GENERATO=======
+//#define datasetFileName "generated_dataset.ds2"
+//#define queryFileName "generated_queries.ds2"
 
 static int N; // Righe dataset
 static int D; // Colonne dataset
@@ -59,33 +66,41 @@ MATRIX load_data(char *filename, int *n, int *k)
 }
 
 /*
- * save_data
- * =========
- * * Salva su file un array lineare in row-major order
- * come matrice di N righe e M colonne
- * * Codifica del file:
- * primi 4 byte: numero di righe (N) --> numero intero a 32 bit
- * successivi 4 byte: numero di colonne (M) --> numero intero a 32 bit
- * successivi N*M*4 byte: matrix data in row-major order --> numeri interi o
- * floating-point a precisione singola
- */
-void save_data(char *filename, void *X, int n, int k)
-{
-  FILE *fp = fopen(filename, "wb");
-  fwrite(&n, sizeof(int), 1, fp);
-  fwrite(&k, sizeof(int), 1, fp);
+* 	save_data
+* 	=========
+* 
+*	Salva su file un array lineare in row-major order
+*	come matrice di N righe e M colonne
+* 
+* 	Codifica del file:
+* 	primi 4 byte: numero di righe (N) --> numero intero a 64 bit
+* 	successivi 4 byte: numero di colonne (M) --> numero intero a 64 bit
+* 	successivi N*M*4 byte: matrix data in row-major order --> numeri interi o floating-point a precisione singola
+*/
+void save_data(char* filename, void* X, int n, int k, size_t elem_size) {
+    FILE* fp;
+    fp = fopen(filename, "wb");
+    if (!fp) {
+        printf("Errore apertura file %s\n", filename);
+        return;
+    }
 
-  // Usa un puntatore a byte per avanzare correttamente
-  char *ptr = (char *)X;
+    if (X != NULL) {
+        // Intestazione
+        fwrite(&n, sizeof(int), 1, fp);
+        fwrite(&k, sizeof(int), 1, fp);
 
-  for (int i = 0; i < n; i++)
-  {
-    fwrite(ptr, sizeof(type), k, fp);
-    ptr += sizeof(type) * k;
-  }
-
-  fclose(fp);
+        fwrite(X, elem_size, (size_t)n * k, fp);
+    }
+    else {
+        // Gestione caso NULL (scrive 0, 0)
+        int x = 0;
+        fwrite(&x, sizeof(int), 1, fp);
+        fwrite(&x, sizeof(int), 1, fp);
+    }
+    fclose(fp);
 }
+
 
 int main(int argc, char **argv)
 {
@@ -183,8 +198,8 @@ int main(int argc, char **argv)
 
   char* outname_id = "out_idnn.ds2";
   char* outname_k = "out_distnn.ds2";
-  save_data(outname_id, input->id_nn, input->nq, input->k);
-  save_data(outname_k, input->dist_nn, input->nq, input->k);
+  save_data(outname_id, input->id_nn, input->nq, input->k, sizeof(int));
+  save_data(outname_k, input->dist_nn, input->nq, input->k, sizeof(type));
 
   if (!input->silent)
   {
