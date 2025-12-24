@@ -12,6 +12,8 @@
 
 const int INDEXING_PROCEDURE_ERROR = -1;
 const int BLOCK_SIZE = 512;
+const int BATCH_QUERY = 32;
+
 
 // Variabili globali per i dati quantizzati
 uint32_t *vPlus_all = NULL;
@@ -264,7 +266,7 @@ void preQuantizeDataset(params *input)
     VECTOR v = &input->DS[i * D];                       // Vettore corrente del dataset
     uint32_t *vp = &vPlus_all[i * num_blocchi_global];  // Vettore vPlus da quantizzare, preso dalla matrice globale
     uint32_t *vm = &vMinus_all[i * num_blocchi_global]; // Vettore vMinus da quantizzare, preso dalla matrice globale
-    quantizing(v, vm, vp, input, idx_buff);
+    quantizing(v, vp, vm, input, idx_buff);
   }
 
   free(idx_buff);
@@ -308,7 +310,7 @@ void preQuantizePivots(params *input)
     }
     VECTOR p = &input->DS[pivot_idx * D];
 
-    quantizing(p, pM, pP, input, idx_buff);
+    quantizing(p, pP, pM, input, idx_buff);
   }
   free(idx_buff);
 }
@@ -444,7 +446,7 @@ void predict(params *input)
     }
 
     // Quantizza query
-    quantizing(query, qMinus, qPlus, input, idx_buff);
+    quantizing(query, qPlus, qMinus, input, idx_buff);
 
     // Precalcola distanze query-pivot
     for (int j = 0; j < h; j++) {
@@ -455,24 +457,31 @@ void predict(params *input)
   }
   free(idx_buff);
 
-  // iteriamo i blocchi di dataset in ram e calcoliamo tutte le query
-  for (int idxStart = 0; idxStart < N; idxStart += BLOCK_SIZE)
-  {
-    int idxEnd = idxStart + BLOCK_SIZE;
-    if (idxEnd > N)
-      idxEnd = N;
-    for (int q = 0; q < nq; q++)
-    {
-      VECTOR query = &input->Q[q * D];
-      uint32_t *qPlus = &qPlusAll[q * num_blocchi_global];
-      uint32_t *qMinus = &qMinusAll[q * num_blocchi_global];
-      VECTOR dQP = &dQPAll[q * h];
-      VECTOR current_KNN = &KNNAll[q * 2 * k];
+#pragma omp parallel for
+  for (int qStart = 0; qStart < nq; qStart += BATCH_QUERY) {
 
-      // Aggiorna lo stato KNN della query q con i dati del blocco dataset corrente
-      process_block_for_query(idxStart, idxEnd, query, input, qPlus, qMinus, dQP, current_KNN);
+    int qEnd = qStart + BATCH_QUERY;
+    if (qEnd > nq) qEnd = nq;
+
+    // CACHE BLOCKING SU DATASET
+    for (int idxStart = 0; idxStart < N; idxStart += BLOCK_SIZE) {
+      int idxEnd = idxStart + BLOCK_SIZE;
+      if (idxEnd > N) idxEnd = N;
+
+      // utilizziamo il blocco del dataset per ogni query nel batch
+      for (int q = qStart; q < qEnd; q++) {
+
+        VECTOR query = &input->Q[q * D];
+        uint32_t* qPlus = &qPlusAll[q * num_blocchi_global];
+        uint32_t* qMinus = &qMinusAll[q * num_blocchi_global];
+        VECTOR dQP = &dQPAll[q * h];
+        VECTOR current_KNN = &KNNAll[q * 2 * k];
+
+        process_block_for_query(idxStart, idxEnd, query, input, qPlus, qMinus, dQP, current_KNN);
+      }
     }
   }
+
 
   for (int q = 0; q < nq; q++)
   {
@@ -505,4 +514,3 @@ void predict(params *input)
   free(dQPAll);
   freePreQuantization();
 }
-
