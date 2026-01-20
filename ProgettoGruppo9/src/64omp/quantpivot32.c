@@ -106,7 +106,6 @@ VECTOR indexing(params *input)
   if (output == NULL)
     return NULL;
 
-#pragma omp parallel for
   for (int r = 0; r < N; r++)
   {
     uint32_t *vPlus = &vPlus_all[r * num_blocchi_global];
@@ -260,12 +259,10 @@ void preQuantizeDataset(params *input)
     return;
   }
 
-#pragma omp parallel 
   {
 
     int *idx_buff = malloc(D * sizeof(int));
 
-    #pragma omp parallel for
     for (int i = 0; i < N; i++)
     {
       VECTOR v = &input->DS[i * D];                       // Vettore corrente del dataset
@@ -295,10 +292,8 @@ void preQuantizePivots(params *input)
     return;
   }
 
-#pragma omp parallel
   {
     int *idx_buff = malloc(D * sizeof(int));
-    #pragma omp parallel for
     for (int i = 0; i < h; i++)
     {
       int pivot_idx = input->P[i];
