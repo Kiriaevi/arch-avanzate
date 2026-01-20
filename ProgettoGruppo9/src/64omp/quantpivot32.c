@@ -106,6 +106,7 @@ VECTOR indexing(params *input)
   if (output == NULL)
     return NULL;
 
+#pragma omp parallel for
   for (int r = 0; r < N; r++)
   {
     uint32_t *vPlus = &vPlus_all[r * num_blocchi_global];
@@ -259,17 +260,22 @@ void preQuantizeDataset(params *input)
     return;
   }
 
-  int *idx_buff = malloc(D * sizeof(int));
-
-  for (int i = 0; i < N; i++)
+#pragma omp parallel 
   {
-    VECTOR v = &input->DS[i * D];                       // Vettore corrente del dataset
-    uint32_t *vp = &vPlus_all[i * num_blocchi_global];  // Vettore vPlus da quantizzare, preso dalla matrice globale
-    uint32_t *vm = &vMinus_all[i * num_blocchi_global]; // Vettore vMinus da quantizzare, preso dalla matrice globale
-    quantizing(v, vp, vm, input, idx_buff);
-  }
 
-  free(idx_buff);
+    int *idx_buff = malloc(D * sizeof(int));
+
+    #pragma omp parallel for
+    for (int i = 0; i < N; i++)
+    {
+      VECTOR v = &input->DS[i * D];                       // Vettore corrente del dataset
+      uint32_t *vp = &vPlus_all[i * num_blocchi_global];  // Vettore vPlus da quantizzare, preso dalla matrice globale
+      uint32_t *vm = &vMinus_all[i * num_blocchi_global]; // Vettore vMinus da quantizzare, preso dalla matrice globale
+      quantizing(v, vp, vm, input, idx_buff);
+    }
+
+    free(idx_buff);
+  }
 }
 
 // Pre-quantizzazione dei Pivot
@@ -289,30 +295,33 @@ void preQuantizePivots(params *input)
     return;
   }
 
-  int *idx_buff = malloc(D * sizeof(int));
-
-  for (int i = 0; i < h; i++)
+#pragma omp parallel
   {
-    int pivot_idx = input->P[i];
-
-    uint32_t *pP = &pPlus[i * num_blocchi_global];
-    uint32_t *pM = &pMinus[i * num_blocchi_global];
-
-    if (pivot_idx < 0 || pivot_idx >= input->N)
+    int *idx_buff = malloc(D * sizeof(int));
+    #pragma omp parallel for
+    for (int i = 0; i < h; i++)
     {
-      // Gestione errore pivot fuori range
-      for (int b = 0; b < num_blocchi_global; b++)
-      {
-        pP[b] = 0;
-        pM[b] = 0;
-      }
-      continue;
-    }
-    VECTOR p = &input->DS[pivot_idx * D];
+      int pivot_idx = input->P[i];
 
-    quantizing(p, pP, pM, input, idx_buff);
+      uint32_t *pP = &pPlus[i * num_blocchi_global];
+      uint32_t *pM = &pMinus[i * num_blocchi_global];
+
+      if (pivot_idx < 0 || pivot_idx >= input->N)
+      {
+        // Gestione errore pivot fuori range
+        for (int b = 0; b < num_blocchi_global; b++)
+        {
+          pP[b] = 0;
+          pM[b] = 0;
+        }
+        continue;
+      }
+      VECTOR p = &input->DS[pivot_idx * D];
+
+      quantizing(p, pP, pM, input, idx_buff);
+    }
+    free(idx_buff);
   }
-  free(idx_buff);
 }
 
 // Processa un blocco di dataset [start_N, end_N) per una specifica query
