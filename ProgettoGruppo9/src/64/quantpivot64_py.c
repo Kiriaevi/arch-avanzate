@@ -6,7 +6,7 @@
 
 #include "common.h"
 
-#include "quantpivot32.c"
+#include "quantpivot64.c"
 
 // Struttura per l'oggetto QuantPivot
 typedef struct {
@@ -17,7 +17,7 @@ typedef struct {
 	// Salva i PyArrayObject
 	PyArrayObject* DS_array;	// riferimento all'array dataset
 	PyArrayObject* Q_array;		// riferimento all'array query
-} QuantPivot32Object;
+} QuantPivot64Object;
 
 static void mm_free_destructor(PyObject* capsule) {
     void* ptr = PyCapsule_GetPointer(capsule, NULL);
@@ -27,7 +27,7 @@ static void mm_free_destructor(PyObject* capsule) {
 }
 
 // Deallocazione (pulizia memoria quando l'oggetto viene distrutto)
-static void QuantPivot32_dealloc(QuantPivot32Object *self) {
+static void QuantPivot64_dealloc(QuantPivot64Object *self) {
 	// Libera memoria allocata
 	if (self->input->P != NULL)
 		_mm_free(self->input->P);
@@ -43,7 +43,7 @@ static void QuantPivot32_dealloc(QuantPivot32Object *self) {
 }
 
 // Costruttore
-static int QuantPivot32_init(QuantPivot32Object *self, PyObject *args, PyObject *kwargs) {
+static int QuantPivot64_init(QuantPivot64Object *self, PyObject *args, PyObject *kwargs) {
 	// Inizializzazione parametri
 	self->DS_array = NULL;
 	self->Q_array = NULL;
@@ -65,7 +65,7 @@ static int QuantPivot32_init(QuantPivot32Object *self, PyObject *args, PyObject 
 }
 
 // Metodo fit
-static PyObject* QuantPivot32_fit(QuantPivot32Object *self, PyObject *args, PyObject *kwargs) {
+static PyObject* QuantPivot64_fit(QuantPivot64Object *self, PyObject *args, PyObject *kwargs) {
 	PyArrayObject *ds_array;
 
 	int h, x, silent = 1;
@@ -84,9 +84,9 @@ static PyObject* QuantPivot32_fit(QuantPivot32Object *self, PyObject *args, PyOb
 		return NULL;
 	}
 
-	// Verifica che sia float32
-	if (PyArray_TYPE(ds_array) != NPY_FLOAT32) {
-		PyErr_SetString(PyExc_TypeError, "Data must be float32");
+	// Verifica che sia float64
+	if (PyArray_TYPE(ds_array) != NPY_FLOAT64) {
+		PyErr_SetString(PyExc_TypeError, "Data must be float64");
 		return NULL;
 	}
 
@@ -131,7 +131,7 @@ static PyObject* QuantPivot32_fit(QuantPivot32Object *self, PyObject *args, PyOb
 }
 
 // Metodo predict
-static PyObject* QuantPivot32_predict(QuantPivot32Object *self, PyObject *args, PyObject *kwargs) {
+static PyObject* QuantPivot64_predict(QuantPivot64Object *self, PyObject *args, PyObject *kwargs) {
 	PyArrayObject* query_array;
 	int k, silent = 0;
 
@@ -155,9 +155,9 @@ static PyObject* QuantPivot32_predict(QuantPivot32Object *self, PyObject *args, 
 		return NULL;
 	}
 
-	// Verifica che sia float32
-	if (PyArray_TYPE(query_array) != NPY_FLOAT32) {
-		PyErr_SetString(PyExc_TypeError, "Data must be float32");
+	// Verifica che sia float64
+	if (PyArray_TYPE(query_array) != NPY_FLOAT64) {
+		PyErr_SetString(PyExc_TypeError, "Data must be float64");
 		return NULL;
 	}
 
@@ -181,6 +181,7 @@ static PyObject* QuantPivot32_predict(QuantPivot32Object *self, PyObject *args, 
 	// Estrae il flag silent
 	self->input->silent = silent;
 
+    self->input->Q = query;
 	self->input->id_nn = (int*) _mm_malloc(self->input->nq * self->input->k * sizeof(int), align);
 	self->input->dist_nn = (type*) _mm_malloc(self->input->nq * self->input->k * sizeof(type), align);
 
@@ -207,7 +208,7 @@ static PyObject* QuantPivot32_predict(QuantPivot32Object *self, PyObject *args, 
 	PyArrayObject* dist_nn_array = (PyArrayObject*)PyArray_SimpleNewFromData(
 		2,				// ndim
 		dims,			// shape
-		NPY_FLOAT32,	// dtype
+		NPY_FLOAT64,	// dtype
 		self->input->dist_nn	// data pointer (usa la memoria allineata)
 	);
 	// Crea un capsule per gestire la deallocazione
@@ -229,10 +230,10 @@ static PyObject* QuantPivot32_predict(QuantPivot32Object *self, PyObject *args, 
 }
 
 // Tabella dei metodi
-static PyMethodDef QuantPivot32_methods[] = {
+static PyMethodDef QuantPivot64_methods[] = {
 	{
 		"fit",
-		(PyCFunction)QuantPivot32_fit,
+		(PyCFunction)QuantPivot64_fit,
 		METH_VARARGS | METH_KEYWORDS,
 		"Build the index using data\n\n"
 		"Parameters:\n"
@@ -246,7 +247,7 @@ static PyMethodDef QuantPivot32_methods[] = {
 	},
 	{
 		"predict",
-		(PyCFunction)QuantPivot32_predict,
+		(PyCFunction)QuantPivot64_predict,
 		METH_VARARGS | METH_KEYWORDS,
 		"Query the index\n\n"
 		"Parameters:\n"
@@ -261,44 +262,44 @@ static PyMethodDef QuantPivot32_methods[] = {
 };
 
 // Definizione del tipo Python
-static PyTypeObject QuantPivot32Type = {
+static PyTypeObject QuantPivot64Type = {
 	PyVarObject_HEAD_INIT(NULL, 0)
-	.tp_name = "gruppoX.quantpivot32.QuantPivot",
-	.tp_doc = "QuantPivot 32-bit indexing and querying",
-	.tp_basicsize = sizeof(QuantPivot32Object),
+	.tp_name = "gruppoX.quantpivot64.QuantPivot",
+	.tp_doc = "QuantPivot 64-bit indexing and querying",
+	.tp_basicsize = sizeof(QuantPivot64Object),
 	.tp_itemsize = 0,
 	.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
 	.tp_new = PyType_GenericNew,
-	.tp_init = (initproc)QuantPivot32_init,
-	.tp_dealloc = (destructor)QuantPivot32_dealloc,
-	.tp_methods = QuantPivot32_methods,
+	.tp_init = (initproc)QuantPivot64_init,
+	.tp_dealloc = (destructor)QuantPivot64_dealloc,
+	.tp_methods = QuantPivot64_methods,
 };
 
 
-static struct PyModuleDef quantpivot32_module = {
+static struct PyModuleDef quantpivot64_module = {
     PyModuleDef_HEAD_INIT,
-    .m_name = "_quantpivot32",        // Nome del modulo C
-    .m_doc = "Quantized Pivot Indexing and Querying (32bit)",  // Docstring
+    .m_name = "_quantpivot64",        // Nome del modulo C
+    .m_doc = "Quantized Pivot Indexing and Querying (64bit)",  // Docstring
     .m_size = -1,                     // -1 significa che il modulo non mantiene stato
 };
 
 // Inizializzazione del modulo
-PyMODINIT_FUNC PyInit__quantpivot32(void) {
+PyMODINIT_FUNC PyInit__quantpivot64(void) {
 	PyObject *m;
 
 	// Prepara il tipo
-	if (PyType_Ready(&QuantPivot32Type) < 0)
+	if (PyType_Ready(&QuantPivot64Type) < 0)
 		return NULL;
 
 	// Crea il modulo
-	m = PyModule_Create(&quantpivot32_module);
+	m = PyModule_Create(&quantpivot64_module);
 	if (m == NULL)
 		return NULL;
 
 	// Aggiungi la classe al modulo
-	Py_INCREF(&QuantPivot32Type);
-	if (PyModule_AddObject(m, "QuantPivot", (PyObject *)&QuantPivot32Type) < 0) {
-		Py_DECREF(&QuantPivot32Type);
+	Py_INCREF(&QuantPivot64Type);
+	if (PyModule_AddObject(m, "QuantPivot", (PyObject *)&QuantPivot64Type) < 0) {
+		Py_DECREF(&QuantPivot64Type);
 		Py_DECREF(m);
 		return NULL;
 	}

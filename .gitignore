@@ -57,3 +57,12 @@ dkms.conf
 
 *.data
 main
+
+# Ignora i dataset
+*.ds2
+
+# Ignora cartelle di build Python
+build/
+dist/
+*.egg-info/
+__pycache__

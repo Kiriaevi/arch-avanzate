@@ -180,6 +180,7 @@ static PyObject* QuantPivot32_predict(QuantPivot32Object *self, PyObject *args, 
 
 	// Estrae il flag silent
 	self->input->silent = silent;
+    self->input->Q = query;
 
 	self->input->id_nn = (int*) _mm_malloc(self->input->nq * self->input->k * sizeof(int), align);
 	self->input->dist_nn = (type*) _mm_malloc(self->input->nq * self->input->k * sizeof(type), align);
