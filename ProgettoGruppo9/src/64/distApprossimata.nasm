@@ -127,7 +127,6 @@ loop_resto:
     cmp      r9, r8
     jge      fine
     
-    ; Carico 1 elemento alla volta e uso EAX per calcoli rapidi
     
     ; 1. vPlus ◦ wPlus (Somma)
     mov      eax, [rdi + r9]       ; vPlus 

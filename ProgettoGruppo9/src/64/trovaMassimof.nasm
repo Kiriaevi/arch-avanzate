@@ -90,5 +90,5 @@ fine:
     pop     rbx
     pop     rbp      
     vmovaps xmm0, xmm2
-    vzeroupper                     ; Pulizia registri YMM
+    vzeroupper                     
     ret

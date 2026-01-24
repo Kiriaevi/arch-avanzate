@@ -16,8 +16,8 @@ push    rbp
 
     ; Calcolo limite per UNROLLING (blocchi da 64 byte = 16 float) 
     mov     rdx, rcx
-    and     rdx, -64        ; Arrotonda per difetto al multiplo di 64 (mask 0xFFFFFFC0)
-                            ; 64 byte = 4 registri XMM * 16 byte
+    and     rdx, -64        
+                           
     
     xorps   xmm0, xmm0      
     xorps   xmm1, xmm1      

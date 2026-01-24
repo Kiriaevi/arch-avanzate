@@ -78,28 +78,21 @@ trovaMassimod:
     cmp  rax, rdx
     jge  .done             ; termina se non restano elementi
 
-    ; Carica un double da ciascun vettore
     vmovsd xmm0, [rdi + rax]
     vmovsd xmm1, [rsi + rax]
 
-    ; Differenza scalare
     vsubsd xmm0, xmm0, xmm1
 
-    ; Valore assoluto scalare
     vandpd xmm0, xmm0, [abs_mask_d]
 
-    ; Aggiorna massimo scalare
     vmaxsd xmm2, xmm2, xmm0
 
-    ; Avanza di 1 double (8 byte)
     add  rax, 8
     jmp  .loop_tail
 
 .done:
-    ; Ritorna il risultato in xmm0
     vmovapd xmm0, xmm2
 
-    ; Evita penalty AVX → SSE nel codice chiamante
     vzeroupper
 
     pop  r12

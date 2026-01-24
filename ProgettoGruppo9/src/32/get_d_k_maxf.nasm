@@ -19,10 +19,9 @@ get_d_k_maxf:
     and edx, 0xFFFFFFFC             ; edx = k arrotondato a multiplo di 4
     jz .remainder
     
-    xor ecx, ecx                    ; i = 0
+    xor ecx, ecx                    
     
 .loop4:
-    ; KNN: [id0, dist0, id1, dist1, id2, dist2, id3, dist3, ...]
     movups xmm1, [rdi + rcx*8]      ; [id0, dist0, id1, dist1]
     movups xmm2, [rdi + rcx*8 + 16] ; [id2, dist2, id3, dist3]
     shufps xmm1, xmm2, 0xDD         ; estrae [dist0, dist1, dist2, dist3]

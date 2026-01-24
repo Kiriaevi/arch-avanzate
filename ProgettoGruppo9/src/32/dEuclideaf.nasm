@@ -1,5 +1,5 @@
 
-; Implementazione C di riferiment
+; Implementazione C di riferimento
 ;float dEuclidea(float *v, float *w, int D)
 ;{
 ; float distanza = 0.0f;

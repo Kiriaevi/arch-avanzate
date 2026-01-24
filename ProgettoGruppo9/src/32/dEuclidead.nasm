@@ -1,5 +1,5 @@
 
-; Implementazione C di riferiment
+; Implementazione C di riferimento
 ;double dEuclidea(double *v, double *w, int D)
 ;{
 ; double distanza = 0.0f;
@@ -22,7 +22,7 @@ dEuclidead:
     ; Input e registri associati: rdi=v, rsi=w, edx=D
 
     movsxd  rcx, edx        ; rcx = D
-    shl     rcx, 3          ; un double è grande 8 byte -> shl 3          
+    shl     rcx, 3          
     mov     rdx, rcx        ; rdx = D * 2
     shr     rdx, 4          ; D00, concateno due zeri, ora è multiplo di 4
     shl     rdx, 4          

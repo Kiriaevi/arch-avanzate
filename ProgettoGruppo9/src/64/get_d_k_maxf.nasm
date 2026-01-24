@@ -23,7 +23,6 @@ get_d_k_maxf:
     xor ecx, ecx                    ; i = 0
     
 .loop8:
-    ; KNN: [id0, dist0, id1, dist1, id2, dist2, id3, dist3, ...]
     vmovups ymm1, [rdi + rcx*8]     ; [id0, dist0, id1, dist1, id2, dist2, id3, dist3]
     vmovups ymm2, [rdi + rcx*8 + 32]; [id4, dist4, id5, dist5, id6, dist6, id7, dist7]
     vshufps ymm1, ymm1, ymm2, 0xDD  ; estrae [dist0, dist1, dist4, dist5 | dist2, dist3, dist6, dist7]

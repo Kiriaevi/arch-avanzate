@@ -2,37 +2,20 @@
 
 default rel
 
-section .data			; Sezione contenente dati inizializzati
+section .data			
 
 input		equ		8
 msg			db	'nq:',32,0
 nl			db	10,0
 
 
-section .bss			; Sezione contenente dati non inizializzati
+section .bss			
 	alignb 16
 	nq		resd		1
 
-section .text			; Sezione contenente il codice macchina
+section .text			
 
 
-; ----------------------------------------------------------
-; macro per l'allocazione dinamica della memoria
-;
-;	getmem	<size>,<elements>
-;
-; alloca un'area di memoria di <size>*<elements> bytes
-; (allineata a 16 bytes) e restituisce in EAX
-; l'indirizzo del primo bytes del blocco allocato
-; (funziona mediante chiamata a funzione C, per cui
-; altri registri potrebbero essere modificati)
-;
-;	fremem	<address>
-;
-; dealloca l'area di memoria che ha inizio dall'indirizzo
-; <address> precedentemente allocata con getmem
-; (funziona mediante chiamata a funzione C, per cui
-; altri registri potrebbero essere modificati)
 
 extern get_block
 extern free_block
