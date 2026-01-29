@@ -21,7 +21,6 @@ uint32_t *pMinus = NULL;
 
 int num_blocchi_global = 0;
 
-/* Ma che vuol dire che in C non c'è l'overloading della funzioni... -> https://en.cppreference.com/w/c/language/generic.html*/
 extern double trovaMassimod(double *current_index_row, double *dQP, int h);
 extern float trovaMassimof(float *current_index_row, float *dQP, int h);
 #define trovaMassimo(curr_index_row, dQP, h) _Generic((curr_index_row), float *: trovaMassimof, double *: trovaMassimod)(curr_index_row, dQP, h)
@@ -63,29 +62,29 @@ void freePreQuantization()
 }
 
 // Gestione lista ordinata K-NN
-void insert_into_knn(VECTOR KNN, int k, int id, type distance)
+void inserisciInKNN(VECTOR KNN, int k, int id, type distanza)
 {
-  type max_distance = -1.0f;
-  int max_index_id = -1;
+  type distanzaMassima = -1.0f;
+  int idMax = -1;
 
   // Trova il vicino più lontano attualmente in lista (il candidato ad uscire)
   for (int i = 0; i < k; i++)
   {
-    int index_dist = (i * 2) + 1;
-    type current_distance = KNN[index_dist];
+    int idDist = (i * 2) + 1;
+    type distanzaCorrente = KNN[idDist];
 
-    if (current_distance > max_distance)
+    if (distanzaCorrente > distanzaMassima)
     {
-      max_distance = current_distance;
-      max_index_id = i * 2;
+      distanzaMassima = distanzaCorrente;
+      idMax = i * 2;
     }
   }
 
   // Se la nuova distanza è minore del peggiore attuale, sostituisci
-  if (distance < max_distance)
+  if (distanza < distanzaMassima)
   {
-    KNN[max_index_id] = id;
-    KNN[max_index_id + 1] = distance;
+    KNN[idMax] = id;
+    KNN[idMax + 1] = distanza;
   }
 }
 
@@ -161,7 +160,6 @@ void quantizing(VECTOR v, uint32_t *vPlus, uint32_t *vMinus, params *input, int 
     }
 
     // uso un min HEAP per trovare i primi x massimi
-    // https://neetcode.io/solutions/top-k-frequent-elements#2-min-heap
     int initHeapSize = ((x-1)-1) / 2;
     for (int i = initHeapSize; i >= 0; i--) {
       heapify(v, array_indici, x, i);
@@ -177,37 +175,18 @@ void quantizing(VECTOR v, uint32_t *vPlus, uint32_t *vMinus, params *input, int 
         array_indici[i] = temp;
         heapify(v, array_indici, x, 0);
       }
-    /*
-        // per ora lascio il partial sort
-    for (int i = 0; i < x; i++) {
-      int maxIndex = i;
-      double maxVal = ABS(v[array_indici[i]]); 
-      for (int j = i + 1; j < D; j++) {
-        double currentVal = ABS(v[array_indici[j]]);
-        if (currentVal > maxVal) {
-          maxVal = currentVal;
-          maxIndex = j;
-        }
-      }
-      // Scambio solo gli indici
-      int temp = array_indici[i];
-      array_indici[i] = array_indici[maxIndex];
-      array_indici[maxIndex] = temp;
-    }
-    */
-
     // Assegnazione ai vettori vPlus e vMinus
     for (int i = 0; i < x; i++)
     {
-        int original_idx = array_indici[i];
+        int idOriginale = array_indici[i];
 
         // Divisione intera e modulo per individuare il blocco e il bit
-        int bucket = original_idx / 32;          
-        int esponente_locale = original_idx % 32; 
+        int bucket = idOriginale / 32;          
+        int esponente_locale = idOriginale % 32; 
 
         uint32_t valore_posizionale = (uint32_t)pow(2, esponente_locale);
 
-        if (v[original_idx] >= 0) {
+        if (v[idOriginale] >= 0) {
             vPlus[bucket] += valore_posizionale;
         } else {
             vMinus[bucket] += valore_posizionale;
@@ -326,11 +305,11 @@ void process_block_for_query(int start_N, int end_N, VECTOR query, params *input
     // Itera SOLO sul blocco corrente del dataset
     for (int i = start_N; i < end_N; i++)
     {
-        type *current_index_row = &input->index[i * h];
+        type *rigaCorrente = &input->index[i * h];
         type best_lb = 0.0;
         int j = 0;
 
-        best_lb = trovaMassimo(current_index_row, dQP, h);
+        best_lb = trovaMassimo(rigaCorrente, dQP, h);
 
         if (best_lb >= d_k_max)
             continue;
@@ -342,7 +321,7 @@ void process_block_for_query(int start_N, int end_N, VECTOR query, params *input
 
         if (d_q_v_approx < d_k_max)
         {
-            insert_into_knn(KNN, k, i, d_q_v_approx);
+            inserisciInKNN(KNN, k, i, d_q_v_approx);
             d_k_max = get_d_k_max(KNN, k);
         }
     }

@@ -7,16 +7,16 @@
 #include <xmmintrin.h>
 
 // =======32 BIT PROFESSORE=======  
-#define datasetFileName "dataset_2000x256_32.ds2"
-#define queryFileName "query_2000x256_32.ds2"
+//#define datasetFileName "dataset_2000x256_32.ds2"
+//#define queryFileName "query_2000x256_32.ds2"
 
 // =======64 BIT PROFESSORE=======  
 //#define datasetFileName "dataset_2000x256_64.ds2"
 //#define queryFileName "query_2000x256_64.ds2"
 
 // =======DATASET GENERATO=======
-//#define datasetFileName "generated_dataset.ds2"
-//#define queryFileName "generated_queries.ds2"
+#define datasetFileName "generated_dataset.ds2"
+#define queryFileName "generated_queries.ds2"
 
 static int N; // Righe dataset
 static int D; // Colonne dataset

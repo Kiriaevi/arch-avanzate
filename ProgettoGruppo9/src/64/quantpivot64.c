@@ -21,7 +21,6 @@ uint32_t *pMinus = NULL;
 
 int num_blocchi_global = 0;
 
-/* Ma che vuol dire che in C non c'è l'overloading della funzioni... -> https://en.cppreference.com/w/c/language/generic.html*/
 extern double trovaMassimod(double *current_index_row, double *dQP, int h);
 extern float trovaMassimof(float *current_index_row, float *dQP, int h);
 #define trovaMassimo(curr_index_row, dQP, h) _Generic((curr_index_row), float *: trovaMassimof, double *: trovaMassimod)(curr_index_row, dQP, h)
@@ -63,7 +62,7 @@ void freePreQuantization()
 }
 
 // Gestione lista ordinata K-NN
-void inserisciInKnn(VECTOR KNN, int k, int id, type distance)
+void inserisciInKnn(VECTOR KNN, int k, int id, type distanza)
 {
   type distanzaMassima = -1.0f;
   int idMax = -1;
@@ -71,21 +70,21 @@ void inserisciInKnn(VECTOR KNN, int k, int id, type distance)
   // Trova il vicino più lontano attualmente in lista (il candidato ad uscire)
   for (int i = 0; i < k; i++)
   {
-    int index_dist = (i * 2) + 1;
-    type current_distance = KNN[index_dist];
+    int idDist = (i * 2) + 1;
+    type distanzaCorrente = KNN[idDist];
 
-    if (current_distance > distanzaMassima)
+    if (distanzaCorrente > distanzaMassima)
     {
-      distanzaMassima = current_distance;
+      distanzaMassima = distanzaCorrente;
       idMax = i * 2;
     }
   }
 
   // Se la nuova distanza è minore del peggiore attuale, sostituisci
-  if (distance < distanzaMassima)
+  if (distanza < distanzaMassima)
   {
     KNN[idMax] = id;
-    KNN[idMax + 1] = distance;
+    KNN[idMax + 1] = distanza;
   }
 }
 
@@ -97,8 +96,6 @@ VECTOR indexing(params *input)
   int h = input->h;
   int D = input->D;
 
-  // TODO:
-  // perché allineare a 32 byte?
   VECTOR output = _mm_malloc(N * h * sizeof(type), 32); 
 
   if (output == NULL)
