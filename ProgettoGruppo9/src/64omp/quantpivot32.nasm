@@ -1,4 +1,4 @@
-%include "sseutils64.nasm"
+%include "sseutils32.nasm"
 
 default rel
 
@@ -88,8 +88,8 @@ prova:
 		; [RDI+72]input->silent;	// modalità silenziosa
 
 		; STAMPA IL PARAMETRO nq
-		VMOVSS XMM0, [RDI+68]
-		VMOVSS [nq], XMM0
+		MOVSS XMM0, [RDI+68]
+		MOVSS [nq], XMM0
 		prints msg
 		printsi nq
 		prints nl
