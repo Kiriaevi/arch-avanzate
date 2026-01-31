@@ -7,16 +7,16 @@
 #include <xmmintrin.h>
 
 // =======32 BIT PROFESSORE=======  
-//#define datasetFileName "dataset_2000x256_32.ds2"
-//#define queryFileName "query_2000x256_32.ds2"
+#define datasetFileName "dataset_2000x256_32.ds2"
+#define queryFileName "query_2000x256_32.ds2"
 
 // =======64 BIT PROFESSORE=======  
 //#define datasetFileName "dataset_2000x256_64.ds2"
 //#define queryFileName "query_2000x256_64.ds2"
 
 // =======DATASET GENERATO=======
-#define datasetFileName "generated_dataset.ds2"
-#define queryFileName "generated_queries.ds2"
+//#define datasetFileName "generated_dataset.ds2"
+//#define queryFileName "generated_queries.ds2"
 
 static int N; // Righe dataset
 static int D; // Colonne dataset
@@ -51,7 +51,6 @@ MATRIX load_data(char *filename, int *n, int *k)
     exit(0);
   }
 
-  // TODO: gestiamo il controllo errori?
   status = fread(&rows, sizeof(int), 1, fp);
   status = fread(&cols, sizeof(int), 1, fp);
 
@@ -128,7 +127,6 @@ int main(int argc, char **argv)
 
   N = input->N;
   D = input->D;
-  printf("N = %d, D = %d, h = %d, x = %d, k = %d\n", N, D, h, x, k);
 
   double t;
   t = omp_get_wtime();
@@ -154,47 +152,6 @@ int main(int argc, char **argv)
     printf("PREDICT time = %.5f secs\n", (double)t);
   else
     printf("%.3f\n", (double)t);
-
-  printf("\n=== CONFRONTO PRIME DISTANZE ===\n");
-
-    int M = 20;                  
-    if (M > input->k) M = input->k; 
-    if (M > input->N) M = input->N;
-
-  VECTOR approx = malloc(M * sizeof(type));
-  VECTOR real = malloc(input->N * sizeof(type));
-
-    VECTOR queryVec = &input->Q[0 * D];
-
-    for(int j = 0; j < M; j++) {
-        approx[j] = input->dist_nn[j]; 
-    }
-
-    //CALCOLO TUTTE LE DISTANZE REALI
-    for(int i = 0; i < input->N; i++) {
-        VECTOR vec = &input->DS[i * D];
-        real[i] = dEuclidea(queryVec, vec, D);
-    }
-
-    for(int a=0; a<M; a++){
-        int min_idx = a;
-        for(int b=a+1; b<input->N; b++){
-            if(real[b] < real[min_idx]) min_idx = b;
-        }
-        type tmp = real[a];
-        real[a] = real[min_idx];
-        real[min_idx] = tmp;
-    }
-
-    printf("\nIdx |    Approssimata    |       Reale (Best)\n");
-    printf("----------------------------------------\n");
-
-    for(int i=0; i<M; i++){
-        printf("%3d | %14.6f | %14.6f\n", i, approx[i], real[i]);
-    }
-
-    free(approx);
-    free(real);
 
   char* outname_id = "out_idnn.ds2";
   char* outname_k = "out_distnn.ds2";
@@ -229,20 +186,6 @@ int main(int argc, char **argv)
       VECTOR neighborVec = &input->DS[idx * D];
       realDistances[i*k+j] = dEuclidea(queryVec, neighborVec, D);
     }
-  }
-  printf("\n--- CONFRONTO DISTANZE (nq: %d, k: %d) ---\n", input->nq, k);
-
-  for (int i = 0; i < input->nq; i++) {
-    VECTOR queryVec = &input->Q[i * D]; 
-
-    for (int j = 0; j < k; j++) {
-      int idx_neighbor = input->id_nn[i*k+j];
-
-      VECTOR neighborVec = &input->DS[idx_neighbor * D]; 
-      type real = dEuclidea(queryVec, neighborVec, D);
-      type stored = input->dist_nn[i*k+j];
-    }
-    // printf("\n");
   }
 
   free(realDistances);

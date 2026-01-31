@@ -196,7 +196,6 @@ void quantizing(VECTOR v, uint32_t *vPlus, uint32_t *vMinus, params *input, int 
 
 int *calcoloPivot(VECTOR dataSet, int h, int N, int D)
 {
-  printf("INIZIO CALCOLO PIVOT\n");
   int *pivot = (int *)_mm_malloc(h * sizeof(int), 32);
 
   if (!pivot)
@@ -213,7 +212,6 @@ int *calcoloPivot(VECTOR dataSet, int h, int N, int D)
   for (int i = 0; i < h; i++)
     pivot[i] = i * offset;
 
-  printf("FINE CALCOLO PIVOT\n");
   return pivot;
 }
 
@@ -227,7 +225,6 @@ void preQuantizeDataset(params *input)
 
   if (!vPlus_all || !vMinus_all)
   {
-    fprintf(stderr, "Errore allocazione vPlus_all/vMinus_all\n");
     if (vPlus_all)
       free(vPlus_all);
     if (vMinus_all)
@@ -257,7 +254,6 @@ void preQuantizePivots(params *input)
 
   if (!pPlus || !pMinus)
   {
-    fprintf(stderr, "Errore allocazione pPlus/pMinus\n");
     if (pPlus)
       free(pPlus);
     if (pMinus)
@@ -333,23 +329,18 @@ void fit(params *input)
   num_blocchi_global = (input->D + 31) / 32;
 
   // Selezione dei pivot
-  printf("INIZIO SELEZIONE PIVOT\n");
   input->P = calcoloPivot(input->DS, input->h, input->N, input->D);
   if (!input->P)
   {
-    fprintf(stderr, "Errore calcolo pivot!\n");
     if (input->DS)
       _mm_free(input->DS);
     return;
   }
-  printf("FINE SELEZIONE PIVOT\n");
 
   // pre-quantizzazione dataset
-  printf("INIZIO PRE-QUANTIZZAZIONE DATASET\n");
   preQuantizeDataset(input);
   if (!vPlus_all || !vMinus_all)
   {
-    fprintf(stderr, "Errore preQuantizeDataset: allocazione fallita\n");
     if (input->P)
       _mm_free(input->P);
     if (vPlus_all)
@@ -358,36 +349,29 @@ void fit(params *input)
       free(vMinus_all);
     return;
   }
-  printf("FINE PRE-QUANTIZZAZIONE DATASET\n");
 
   pPlus = calloc(input->h * num_blocchi_global, sizeof(uint32_t));
   pMinus = calloc(input->h * num_blocchi_global, sizeof(uint32_t));
 
   // pre-quantizzazione pivot
-  printf("INIZIO PRE-QUANTIZZAZIONE PIVOT\n");
   preQuantizePivots(input);
   if (!pPlus || !pMinus)
   {
-    fprintf(stderr, "Errore preQuantizePivots: allocazione fallita\n");
     if (input->P)
       _mm_free(input->P);
     freePreQuantization();
     return;
   }
-  printf("FINE PRE-QUANTIZZAZIONE PIVOT\n");
 
   // Costruzione dell'indice
-  printf("INIZIO COSTRUZIONE INDICE\n");
   input->index = indexing(input);
   if (!input->index)
   {
-    fprintf(stderr, "Errore indexing!\n");
     if (input->P)
       _mm_free(input->P);
     freePreQuantization();
     exit(INDEXING_PROCEDURE_ERROR);
   }
-  printf("FINE COSTRUZIONE INDICE\n");
 }
 
 void predict(params *input)
